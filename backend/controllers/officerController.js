@@ -1,0 +1,206 @@
+const Officer = require("../models/Officer");
+
+// Add new officer
+exports.addOfficer = async (req, res) => {
+  try {
+    const { name, phone, designation, department, unit, bpNumber, status } =
+      req.body;
+
+    // Check if officer with same phone or bpNumber exists
+    const existingOfficer = await Officer.findOne({
+      $or: [{ phone }, { bpNumber }],
+    });
+
+    if (existingOfficer) {
+      return res.status(400).json({
+        error: "Officer with this phone number or BP number already exists",
+      });
+    }
+
+    const officer = new Officer({
+      name,
+      phone,
+      designation,
+      department,
+      unit: unit || "",
+      bpNumber,
+      status: status || "active",
+    });
+
+    await officer.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Officer added successfully",
+      officer,
+    });
+  } catch (error) {
+    console.error("Error adding officer:", error);
+    res.status(500).json({ error: "Failed to add officer" });
+  }
+};
+
+// Get all officers with search and filters
+exports.getAllOfficers = async (req, res) => {
+  try {
+    const { search, multiSearch, status, department, designation } = req.query;
+
+    let query = {};
+
+    // Handle comma-separated multi-search
+    if (multiSearch) {
+      const searchTerms = multiSearch
+        .split(",")
+        .map((term) => term.trim())
+        .filter((term) => term);
+
+      if (searchTerms.length > 0) {
+        const orConditions = [];
+
+        searchTerms.forEach((term) => {
+          // Create case-insensitive regex for each term
+          const regex = new RegExp(term, "i");
+
+          orConditions.push(
+            { name: regex },
+            { phone: regex },
+            { designation: regex },
+            { department: regex },
+            { unit: regex },
+            { bpNumber: regex }
+          );
+        });
+
+        query.$or = orConditions;
+      }
+    }
+    // Handle single search term (backward compatible)
+    else if (search) {
+      const regex = new RegExp(search, "i");
+      query.$or = [
+        { name: regex },
+        { phone: regex },
+        { designation: regex },
+        { department: regex },
+        { unit: regex },
+        { bpNumber: regex },
+      ];
+    }
+
+    // Individual filters (only apply if we're not using comma-separated multi-search)
+    if (!multiSearch) {
+      // Status filter
+      if (status && ["active", "inactive"].includes(status)) {
+        query.status = status;
+      }
+
+      // Department filter
+      if (department) {
+        query.department = { $regex: department, $options: "i" };
+      }
+
+      // Designation filter
+      if (designation) {
+        query.designation = { $regex: designation, $options: "i" };
+      }
+    }
+
+    const officers = await Officer.find(query)
+      .sort({ createdAt: -1 })
+      .select("-__v");
+
+    res.json({
+      success: true,
+      count: officers.length,
+      officers,
+    });
+  } catch (error) {
+    console.error("Error fetching officers:", error);
+    res.status(500).json({ error: "Failed to fetch officers" });
+  }
+};
+
+// Update officer status
+exports.updateOfficerStatus = async (req, res) => {
+  try {
+    const { officerId } = req.params;
+    const { status } = req.body;
+
+    if (!["active", "inactive"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const officer = await Officer.findByIdAndUpdate(
+      officerId,
+      { status, updatedAt: Date.now() },
+      { new: true, runValidators: true }
+    ).select("-__v");
+
+    if (!officer) {
+      return res.status(404).json({ error: "Officer not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Officer status updated successfully",
+      officer,
+    });
+  } catch (error) {
+    console.error("Error updating officer status:", error);
+    res.status(500).json({ error: "Failed to update officer status" });
+  }
+};
+
+// Search officers by name (for visitor form)
+exports.searchOfficers = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query || query.length < 2) {
+      return res.json({
+        success: true,
+        officers: [],
+      });
+    }
+
+    const officers = await Officer.find({
+      $or: [
+        { name: { $regex: query, $options: "i" } },
+        { designation: { $regex: query, $options: "i" } },
+        { department: { $regex: query, $options: "i" } },
+      ],
+      status: "active",
+    })
+      .select("name designation department phone bpNumber")
+      .limit(10);
+
+    res.json({
+      success: true,
+      officers,
+    });
+  } catch (error) {
+    console.error("Error searching officers:", error);
+    res.status(500).json({ error: "Failed to search officers" });
+  }
+};
+
+// Get officer by ID
+exports.getOfficerById = async (req, res) => {
+  try {
+    const { officerId } = req.params;
+
+    const officer = await Officer.findById(officerId).select("-__v");
+
+    if (!officer) {
+      return res.status(404).json({ error: "Officer not found" });
+    }
+
+    res.json({
+      success: true,
+      officer,
+    });
+  } catch (error) {
+    console.error("Error fetching officer:", error);
+    res.status(500).json({ error: "Failed to fetch officer" });
+  }
+};
