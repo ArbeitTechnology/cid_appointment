@@ -8,23 +8,30 @@ import {
   CheckCircleIcon,
   ShieldCheckIcon,
   ClockIcon,
+  UserIcon,
+  LockClosedIcon,
 } from "@heroicons/react/24/outline";
 
 const DashboardHome = ({ user }) => {
-  const { isAdmin, getAllUsers } = useAuth();
+  const { isAdmin, getAllUsers, user: currentUser } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
     inactiveUsers: 0,
+    totalAdmins: 0,
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isAdmin && user) {
+    if (
+      (currentUser?.userType === "admin" ||
+        currentUser?.userType === "super_admin") &&
+      user
+    ) {
       fetchAdminData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, user]);
+  }, [currentUser?.userType, user]);
 
   const fetchAdminData = async () => {
     try {
@@ -32,14 +39,27 @@ const DashboardHome = ({ user }) => {
       const result = await getAllUsers();
       if (result.success) {
         const users = result.data;
-        const nonAdminUsers = users.filter((u) => u.userType !== "admin");
+
+        // For super admin: show all non-super_admin users
+        // For regular admin: show only regular users
+        let filteredUsers = users;
+        if (currentUser?.userType === "admin") {
+          filteredUsers = users.filter(
+            (u) => u.userType !== "admin" && u.userType !== "super_admin"
+          );
+        } else if (currentUser?.userType === "super_admin") {
+          filteredUsers = users.filter((u) => u.userType !== "super_admin");
+        }
+
+        const admins = users.filter((u) => u.userType === "admin");
 
         setStats({
-          totalUsers: nonAdminUsers.length,
-          activeUsers: nonAdminUsers.filter((u) => u.status === "active")
+          totalUsers: filteredUsers.length,
+          activeUsers: filteredUsers.filter((u) => u.status === "active")
             .length,
-          inactiveUsers: nonAdminUsers.filter((u) => u.status === "inactive")
+          inactiveUsers: filteredUsers.filter((u) => u.status === "inactive")
             .length,
+          totalAdmins: admins.length,
         });
       }
     } catch (error) {
@@ -49,7 +69,13 @@ const DashboardHome = ({ user }) => {
     }
   };
 
-  if (isAdmin) {
+  const getUserTypeDisplay = () => {
+    if (user?.userType === "super_admin") return "Super Admin";
+    if (user?.userType === "admin") return "Admin";
+    return "User";
+  };
+
+  if (user?.userType === "super_admin" || user?.userType === "admin") {
     return (
       <div className="space-y-6">
         <div className="bg-linear-to-r from-purple-900 to-black rounded-xl p-6 md:p-8">
@@ -58,9 +84,13 @@ const DashboardHome = ({ user }) => {
               <ShieldCheckIcon className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Welcome, Admin</h2>
+              <h2 className="text-2xl font-bold text-white">
+                Welcome, {getUserTypeDisplay()} {user?.name}
+              </h2>
               <p className="text-gray-300">
-                Manage the system and monitor user activities
+                {user?.userType === "super_admin"
+                  ? "Manage the entire system and all users"
+                  : "Manage user accounts and monitor activities"}
               </p>
             </div>
           </div>
@@ -71,7 +101,7 @@ const DashboardHome = ({ user }) => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -133,6 +163,29 @@ const DashboardHome = ({ user }) => {
                 </div>
               </div>
             </motion.div>
+
+            {user?.userType === "super_admin" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <ShieldCheckIcon className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Total Admins
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {stats.totalAdmins}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </div>
         )}
       </div>
@@ -164,7 +217,7 @@ const DashboardHome = ({ user }) => {
         >
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-blue-100 rounded-lg">
-              <UserGroupIcon className="h-6 w-6 text-blue-600" />
+              <UserIcon className="h-6 w-6 text-blue-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium">Account Type</p>

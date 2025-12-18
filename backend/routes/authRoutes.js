@@ -14,7 +14,13 @@ router.get("/profile", auth, authController.getUserProfile);
 router.put("/profile", auth, authController.updateUserProfile);
 router.put("/change-password", auth, authController.changePassword);
 
-// Admin only routes
+// Admin routes
 router.get("/admin/all-users", auth, authController.getAllUsers);
+router.put("/admin/update-role/:userId", auth, authController.updateUserRole);
+router.put(
+  "/admin/update-status/:userId",
+  auth,
+  authController.updateUserStatus
+);
 
 module.exports = router;

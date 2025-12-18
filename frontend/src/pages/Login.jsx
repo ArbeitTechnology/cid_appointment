@@ -73,17 +73,31 @@ const Login = () => {
     } catch (error) {
       toast.dismiss(loadingToast);
 
-      const errorMessage =
+      // Check for specific error messages
+      let errorMessage =
         error.response?.data?.error || "Failed to login. Please try again.";
 
-      toast.error(
-        <div className="flex items-center space-x-2">
-          <span>{errorMessage}</span>
-        </div>,
-        {
-          duration: 4000,
-        }
-      );
+      // You can customize the toast based on error type
+      if (errorMessage.includes("deactivated")) {
+        toast.error(
+          <div className="flex flex-col space-y-2">
+            <span className="font-medium">Account Deactivated</span>
+            <span className="text-sm">{errorMessage}</span>
+          </div>,
+          {
+            duration: 5000, // Longer duration for important messages
+          }
+        );
+      } else {
+        toast.error(
+          <div className="flex items-center space-x-2">
+            <span>{errorMessage}</span>
+          </div>,
+          {
+            duration: 4000,
+          }
+        );
+      }
     } finally {
       setIsLoading(false);
     }

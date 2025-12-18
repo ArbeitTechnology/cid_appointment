@@ -16,8 +16,10 @@ import {
   FiPhone,
   FiMapPin,
   FiBriefcase,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
-import { format, parseISO, isWithinInterval } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 const VisitorList = () => {
   const [visitors, setVisitors] = useState([]);
@@ -34,6 +36,11 @@ const VisitorList = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalVisitors, setTotalVisitors] = useState(0);
 
   // Parse comma-separated search terms
   const parseSearchTerms = (searchString) => {
@@ -55,6 +62,21 @@ const VisitorList = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    debouncedSearchTerm,
+    phoneFilter,
+    nameFilter,
+    officerNameFilter,
+    officerDepartmentFilter,
+    officerDesignationFilter,
+    purposeFilter,
+    startTime,
+    endTime,
+  ]);
+
   // Fetch visitors with debounced search
   const fetchVisitors = useCallback(async () => {
     try {
@@ -62,7 +84,10 @@ const VisitorList = () => {
       const token = localStorage.getItem("token");
 
       // Build query params
-      const params = {};
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+      };
 
       // Check if we have comma-separated search terms
       if (debouncedSearchTerm) {
@@ -102,6 +127,13 @@ const VisitorList = () => {
       );
 
       setVisitors(response.data.visitors || []);
+      setTotalVisitors(response.data.total || 0);
+
+      // If current page is beyond available pages, reset to page 1
+      const totalPages = Math.ceil((response.data.total || 0) / itemsPerPage);
+      if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(1);
+      }
     } catch (error) {
       console.error("Error fetching visitors:", error);
       toast.error("Failed to fetch visitors");
@@ -109,6 +141,8 @@ const VisitorList = () => {
       setLoading(false);
     }
   }, [
+    currentPage,
+    itemsPerPage,
     debouncedSearchTerm,
     phoneFilter,
     nameFilter,
@@ -203,6 +237,7 @@ const VisitorList = () => {
     setStartTime("");
     setEndTime("");
     setPurposeFilter("all");
+    setCurrentPage(1);
   };
 
   // Apply time range filter
@@ -218,32 +253,55 @@ const VisitorList = () => {
     }
   };
 
-  // Filter visitors by time range (for client-side if needed)
-  const filteredVisitors = useMemo(() => {
-    if (!startTime && !endTime) return visitors;
+  // Calculate pagination
+  const totalPages = Math.ceil(totalVisitors / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalVisitors);
 
-    return visitors.filter((visitor) => {
-      const visitTime = new Date(visitor.visitTime);
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
 
-      if (startTime && endTime) {
-        const start = new Date(startTime);
-        const end = new Date(endTime);
-        return visitTime >= start && visitTime <= end;
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
       }
-
-      if (startTime) {
-        const start = new Date(startTime);
-        return visitTime >= start;
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pageNumbers.push(i);
+        }
+        pageNumbers.push("...");
+        pageNumbers.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pageNumbers.push(1);
+        pageNumbers.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pageNumbers.push(i);
+        }
+      } else {
+        pageNumbers.push(1);
+        pageNumbers.push("...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pageNumbers.push(i);
+        }
+        pageNumbers.push("...");
+        pageNumbers.push(totalPages);
       }
+    }
 
-      if (endTime) {
-        const end = new Date(endTime);
-        return visitTime <= end;
-      }
+    return pageNumbers;
+  };
 
-      return true;
-    });
-  }, [visitors, startTime, endTime]);
+  // Handle page change
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber === "..." || pageNumber < 1 || pageNumber > totalPages) {
+      return;
+    }
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // Get unique purposes for filters
   const purposes = useMemo(() => {
@@ -263,12 +321,12 @@ const VisitorList = () => {
     }).length;
 
     return {
-      total: visitors.length,
+      total: totalVisitors,
       today: todayVisitors,
       case: visitors.filter((v) => v.purpose === "case").length,
       personal: visitors.filter((v) => v.purpose === "personal").length,
     };
-  }, [visitors]);
+  }, [visitors, totalVisitors]);
 
   return (
     <div className="space-y-6">
@@ -293,7 +351,7 @@ const VisitorList = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl p-4 border border-gray-300 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -536,14 +594,97 @@ const VisitorList = () => {
           </motion.div>
         )}
       </div>
+      {/* Pagination Controls */}
+      {visitors.length > 0 && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            {/* Items per page selector */}
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-gray-600">Show:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-1 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm text-gray-600">per page</span>
+            </div>
 
+            {/* Pagination buttons */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Previous page"
+              >
+                <FiChevronLeft className="h-5 w-5" />
+              </button>
+
+              {/* Page numbers */}
+              <div className="flex items-center space-x-1">
+                {getPageNumbers().map((pageNumber, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handlePageChange(pageNumber)}
+                    disabled={pageNumber === "..."}
+                    className={`min-w-10 h-10 flex items-center justify-center rounded-lg border-2 transition-all duration-300 ${
+                      pageNumber === currentPage
+                        ? "bg-green-600 text-white border-green-600 font-medium"
+                        : pageNumber === "..."
+                        ? "border-transparent text-gray-500 cursor-default"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Next page"
+              >
+                <FiChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Summary */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="text-sm text-gray-600">
+          Showing {visitors.length} visitors on page {currentPage} of{" "}
+          {totalPages}
+          {searchTerms.length > 0 && (
+            <span className="ml-2 text-yellow-600 font-medium">
+              • {searchTerms.length} search term
+              {searchTerms.length > 1 ? "s" : ""} active
+            </span>
+          )}
+          {startTime && endTime && (
+            <span className="ml-2 text-green-600 font-medium">
+              • Filtered by time range
+            </span>
+          )}
+        </div>
+      </div>
       {/* Visitors Table */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-300 overflow-hidden">
         {loading ? (
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
           </div>
-        ) : filteredVisitors.length === 0 ? (
+        ) : visitors.length === 0 ? (
           <div className="text-center py-12">
             <FiSearch className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900">
@@ -586,7 +727,7 @@ const VisitorList = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredVisitors.map((visitor) => (
+                {visitors.map((visitor) => (
                   <React.Fragment key={visitor._id}>
                     <motion.tr
                       initial={{ opacity: 0 }}
@@ -656,7 +797,7 @@ const VisitorList = () => {
                           {format(parseISO(visitor.visitTime), "MMM dd, yyyy")}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {format(parseISO(visitor.visitTime), "hh:mm a")}
+                          {format(parseISO(visitor.visitTime), "hh:mm:ss a")}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -843,7 +984,7 @@ const VisitorList = () => {
                                   <img
                                     src={visitor.photo}
                                     alt={visitor.name}
-                                    className="h-48 w-48 object-cover rounded-lg border-2 border-gray-300"
+                                    className="h-full w-64 object-contain"
                                   />
                                 </div>
                               </div>
@@ -858,33 +999,6 @@ const VisitorList = () => {
             </table>
           </div>
         )}
-      </div>
-
-      {/* Summary */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="text-sm text-gray-600">
-          Showing {filteredVisitors.length} of {visitors.length} visitors
-          {searchTerms.length > 0 && (
-            <span className="ml-2 text-yellow-600 font-medium">
-              • {searchTerms.length} search term
-              {searchTerms.length > 1 ? "s" : ""} active
-            </span>
-          )}
-          {startTime && endTime && (
-            <span className="ml-2 text-green-600 font-medium">
-              • Filtered by time range
-            </span>
-          )}
-        </div>
-
-        <div className="flex space-x-3">
-          <button
-            onClick={fetchVisitors}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Refresh Data
-          </button>
-        </div>
       </div>
     </div>
   );

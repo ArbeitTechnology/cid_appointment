@@ -40,9 +40,9 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ error: "Email already in use" });
     }
 
-    // Check if this is the first user (will be admin)
+    // Check if this is the first user (will be super_admin)
     const userCount = await User.countDocuments();
-    const userType = userCount === 0 ? "admin" : "user";
+    const userType = userCount === 0 ? "super_admin" : "user";
 
     // Create user
     const user = new User({
@@ -62,7 +62,9 @@ exports.registerUser = async (req, res) => {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Welcome ${name}!</h2>
           <p>Your account has been successfully created.</p>
-          <p><strong>Account Type:</strong> ${userType}</p>
+          <p><strong>Account Type:</strong> ${
+            userType === "super_admin" ? "Super Admin" : userType
+          }</p>
           <p>Thank you for joining!</p>
         </div>
       `,
@@ -98,6 +100,14 @@ exports.loginUser = async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ error: "Invalid login credentials" });
+    }
+
+    // Check if user is inactive
+    if (user.status === "inactive") {
+      return res.status(403).json({
+        error:
+          "Your account has been deactivated. Please contact the administrator.",
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -277,7 +287,7 @@ exports.getAllUsers = async (req, res) => {
   try {
     const user = req.user;
 
-    if (user.userType !== "admin") {
+    if (user.userType !== "super_admin" && user.userType !== "admin") {
       return res.status(403).json({ error: "Admin access required" });
     }
 
@@ -286,6 +296,115 @@ exports.getAllUsers = async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update user role (Super Admin only)
+exports.updateUserRole = async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const { userId } = req.params;
+    const { userType } = req.body;
+
+    // Only super_admin can change roles
+    if (currentUser.userType !== "super_admin") {
+      return res
+        .status(403)
+        .json({ error: "Only Super Admin can change user roles" });
+    }
+
+    // Check if trying to modify super_admin
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Prevent modifying super_admin
+    if (targetUser.userType === "super_admin") {
+      return res.status(403).json({ error: "Cannot modify Super Admin role" });
+    }
+
+    // Validate userType
+    if (!["admin", "user"].includes(userType)) {
+      return res.status(400).json({ error: "Invalid user type" });
+    }
+
+    targetUser.userType = userType;
+    await targetUser.save();
+
+    res.json({
+      message: `User role updated to ${userType}`,
+      user: {
+        _id: targetUser._id,
+        name: targetUser.name,
+        email: targetUser.email,
+        userType: targetUser.userType,
+        status: targetUser.status,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update user status (Admin/Super Admin)
+exports.updateUserStatus = async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const { userId } = req.params;
+    const { status } = req.body;
+
+    // Only admin/super_admin can change status
+    if (
+      currentUser.userType !== "super_admin" &&
+      currentUser.userType !== "admin"
+    ) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    // Check if trying to modify super_admin (only super_admin can modify super_admin)
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // If target is super_admin, only super_admin can modify
+    if (
+      targetUser.userType === "super_admin" &&
+      currentUser.userType !== "super_admin"
+    ) {
+      return res
+        .status(403)
+        .json({ error: "Only Super Admin can modify Super Admin" });
+    }
+
+    // Validate status
+    if (!["active", "inactive"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    // Prevent admin from modifying other admins
+    if (currentUser.userType === "admin" && targetUser.userType === "admin") {
+      return res
+        .status(403)
+        .json({ error: "Admin cannot modify other admins" });
+    }
+
+    targetUser.status = status;
+    await targetUser.save();
+
+    res.json({
+      message: `User status updated to ${status}`,
+      user: {
+        _id: targetUser._id,
+        name: targetUser.name,
+        email: targetUser.email,
+        userType: targetUser.userType,
+        status: targetUser.status,
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

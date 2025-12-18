@@ -1,5 +1,12 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -13,14 +20,23 @@ import {
   FiCheck,
   FiX,
   FiAlertCircle,
+  FiRefreshCw,
+  FiSearch,
+  FiFilter,
+  FiEye,
+  FiClock,
+  FiCalendar,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import Webcam from "react-webcam";
+import { format, parseISO } from "date-fns";
 
 const AddVisitor = () => {
+  // Add Visitor States
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [photo, setPhoto] = useState("");
-  const [showCamera, setShowCamera] = useState(false);
   const [officerSearch, setOfficerSearch] = useState("");
   const [officerResults, setOfficerResults] = useState([]);
   const [selectedOfficer, setSelectedOfficer] = useState(null);
@@ -28,7 +44,29 @@ const AddVisitor = () => {
   const [phoneSuggestions, setPhoneSuggestions] = useState([]);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
   const [phoneChecking, setPhoneChecking] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
   const webcamRef = useRef(null);
+
+  // Visitor List States
+  const [visitors, setVisitors] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [phoneFilter, setPhoneFilter] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
+  const [officerNameFilter, setOfficerNameFilter] = useState("");
+  const [officerDepartmentFilter, setOfficerDepartmentFilter] = useState("");
+  const [officerDesignationFilter, setOfficerDesignationFilter] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [purposeFilter, setPurposeFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [expandedRows, setExpandedRows] = useState({});
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalVisitors, setTotalVisitors] = useState(0);
 
   const {
     register,
@@ -38,9 +76,153 @@ const AddVisitor = () => {
     setValue,
     watch,
     clearErrors,
+    trigger,
   } = useForm();
 
   const phoneValue = watch("phone");
+
+  // Parse comma-separated search terms for visitor list
+  const parseSearchTerms = (searchString) => {
+    if (!searchString) return [];
+
+    return searchString
+      .split(",")
+      .map((term) => term.trim())
+      .filter((term) => term.length > 0);
+  };
+
+  // Debounce search term for visitor list
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    debouncedSearchTerm,
+    phoneFilter,
+    nameFilter,
+    officerNameFilter,
+    officerDepartmentFilter,
+    officerDesignationFilter,
+    purposeFilter,
+    startTime,
+    endTime,
+  ]);
+
+  // Fetch visitors with debounced search
+  const fetchVisitors = useCallback(async () => {
+    try {
+      setListLoading(true);
+      const token = localStorage.getItem("token");
+
+      // Build query params
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+      };
+
+      // Check if we have comma-separated search terms
+      if (debouncedSearchTerm) {
+        if (debouncedSearchTerm.includes(",")) {
+          params.multiSearch = debouncedSearchTerm;
+        } else {
+          params.search = debouncedSearchTerm;
+        }
+      }
+
+      // Only use individual filters if we don't have comma-separated search
+      if (!debouncedSearchTerm.includes(",")) {
+        if (phoneFilter) params.phone = phoneFilter;
+        if (nameFilter) params.name = nameFilter;
+        if (officerNameFilter) params.officerName = officerNameFilter;
+        if (officerDepartmentFilter)
+          params.officerDepartment = officerDepartmentFilter;
+        if (officerDesignationFilter)
+          params.officerDesignation = officerDesignationFilter;
+        if (purposeFilter && purposeFilter !== "all")
+          params.purpose = purposeFilter;
+      }
+
+      if (startTime) params.startTime = startTime;
+      if (endTime) params.endTime = endTime;
+
+      const response = await axios.get(
+        "http://localhost:5000/api/visitors/all",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params,
+        }
+      );
+
+      setVisitors(response.data.visitors || []);
+      setTotalVisitors(response.data.total || 0);
+
+      const totalPages = Math.ceil((response.data.total || 0) / itemsPerPage);
+      if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(1);
+      }
+    } catch (error) {
+      console.error("Error fetching visitors:", error);
+      toast.error("Failed to fetch visitors");
+    } finally {
+      setListLoading(false);
+    }
+  }, [
+    currentPage,
+    itemsPerPage,
+    debouncedSearchTerm,
+    phoneFilter,
+    nameFilter,
+    officerNameFilter,
+    officerDepartmentFilter,
+    officerDesignationFilter,
+    purposeFilter,
+    startTime,
+    endTime,
+  ]);
+
+  // Initialize webcam when component mounts
+  useEffect(() => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError(true);
+      toast.error("Your browser doesn't support camera access");
+      return;
+    }
+
+    const initializeCamera = async () => {
+      try {
+        await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+        });
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        setCameraError(true);
+        toast.error("Camera access denied. Please allow camera permissions.");
+      }
+    };
+
+    initializeCamera();
+
+    return () => {
+      if (webcamRef.current && webcamRef.current.stream) {
+        const stream = webcamRef.current.stream;
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  // Fetch visitors on mount and when dependencies change
+  useEffect(() => {
+    fetchVisitors();
+  }, [fetchVisitors]);
 
   // Search officers
   useEffect(() => {
@@ -75,15 +257,37 @@ const AddVisitor = () => {
     return () => clearTimeout(timer);
   }, [officerSearch]);
 
+  // Normalize phone number
+  const normalizePhoneNumber = (phone) => {
+    if (!phone) return "";
+    let digits = phone.replace(/\D/g, "");
+
+    if (digits.startsWith("88") && digits.length > 10) {
+      digits = digits.substring(2);
+    } else if (digits.startsWith("1") && digits.length === 11) {
+      // digits = digits.substring(1);
+    }
+
+    return digits;
+  };
+
   // Check phone number
   useEffect(() => {
     const checkPhoneNumber = async () => {
       if (phoneValue && phoneValue.length >= 10) {
+        const normalizedPhone = normalizePhoneNumber(phoneValue);
+
+        if (normalizedPhone.length < 10) {
+          setPhoneSuggestions([]);
+          setShowPhoneSuggestions(false);
+          return;
+        }
+
         setPhoneChecking(true);
         try {
           const token = localStorage.getItem("token");
           const response = await axios.get(
-            `http://localhost:5000/api/visitors/check-phone/${phoneValue}`,
+            `http://localhost:5000/api/visitors/check-phone/${normalizedPhone}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -91,14 +295,11 @@ const AddVisitor = () => {
             }
           );
 
-          console.log("Phone check response:", response.data);
-
           if (
             response.data.exists &&
             response.data.visitors &&
             response.data.visitors.length > 0
           ) {
-            // Now response.data.visitors is an array of objects with address
             setPhoneSuggestions(response.data.visitors);
             setShowPhoneSuggestions(true);
           } else {
@@ -130,10 +331,19 @@ const AddVisitor = () => {
   const capturePhoto = () => {
     if (webcamRef.current) {
       const imageSrc = webcamRef.current.getScreenshot();
-      setPhoto(imageSrc);
-      setShowCamera(false);
-      toast.success("Photo captured successfully!");
+      if (imageSrc) {
+        setPhoto(imageSrc);
+        toast.success("Photo captured successfully!");
+      } else {
+        toast.error("Failed to capture photo. Please try again.");
+      }
     }
+  };
+
+  // Retake photo
+  const retakePhoto = () => {
+    setPhoto("");
+    toast.success("Ready to take new photo!");
   };
 
   // Select officer from search results
@@ -145,31 +355,42 @@ const AddVisitor = () => {
   };
 
   // Select phone suggestion
-  const selectPhoneSuggestion = (visitor) => {
+  const selectPhoneSuggestion = async (visitor) => {
     setValue("name", visitor.name);
     setValue("address", visitor.address || "");
     setShowPhoneSuggestions(false);
-
-    // Clear any existing name/address errors since we're auto-filling
     clearErrors("name");
     clearErrors("address");
-
+    await trigger(["name", "address"]);
     toast.success("Visitor details auto-filled from previous visit!");
   };
 
+  // Add Visitor Form Submit
   const onSubmit = async (data) => {
     if (!selectedOfficer) {
       toast.error("Please select an officer");
       return;
     }
 
+    const normalizedPhone = normalizePhoneNumber(data.phone);
+    if (normalizedPhone.length < 10) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
+
+    if (!photo) {
+      toast.error("Please capture a photo of the visitor");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.post(
+      await axios.post(
         "http://localhost:5000/api/visitors/add",
         {
           ...data,
+          phone: normalizedPhone,
           officerId: selectedOfficer._id,
           photo,
         },
@@ -183,7 +404,7 @@ const AddVisitor = () => {
       toast.success("Visitor added successfully!");
       setShowSuccess(true);
 
-      // Reset form
+      // Reset form but keep camera open
       reset();
       setPhoto("");
       setSelectedOfficer(null);
@@ -191,7 +412,9 @@ const AddVisitor = () => {
       setPhoneSuggestions([]);
       setShowPhoneSuggestions(false);
 
-      // Hide success message after 3 seconds
+      // Refresh visitor list
+      fetchVisitors();
+
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
@@ -204,20 +427,163 @@ const AddVisitor = () => {
     }
   };
 
+  // Visitor List Functions
+  const highlightMatchedText = (text, searchTerms) => {
+    if (!searchTerms || searchTerms.length === 0 || !text) {
+      return <span>{text}</span>;
+    }
+
+    let highlightedText = text.toString();
+
+    searchTerms.forEach((term) => {
+      if (term.trim()) {
+        const regex = new RegExp(`(${term.trim()})`, "gi");
+        highlightedText = highlightedText.replace(
+          regex,
+          '<mark class="bg-yellow-200 text-gray-900 px-1 rounded">$1</mark>'
+        );
+      }
+    });
+
+    return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+  };
+
+  // Get search terms for highlighting
+  const searchTerms = useMemo(() => {
+    const terms = [];
+
+    if (searchTerm.includes(",")) {
+      terms.push(...parseSearchTerms(searchTerm));
+    } else if (searchTerm) {
+      terms.push(searchTerm);
+    }
+
+    if (phoneFilter && !searchTerm.includes(",")) terms.push(phoneFilter);
+    if (nameFilter && !searchTerm.includes(",")) terms.push(nameFilter);
+    if (officerNameFilter && !searchTerm.includes(","))
+      terms.push(officerNameFilter);
+    if (officerDesignationFilter && !searchTerm.includes(","))
+      terms.push(officerDesignationFilter);
+    if (officerDepartmentFilter && !searchTerm.includes(","))
+      terms.push(officerDepartmentFilter);
+    if (purposeFilter !== "all" && !searchTerm.includes(","))
+      terms.push(purposeFilter);
+
+    return terms.filter((term) => term && term.trim().length > 0);
+  }, [
+    searchTerm,
+    phoneFilter,
+    nameFilter,
+    officerNameFilter,
+    officerDesignationFilter,
+    officerDepartmentFilter,
+    purposeFilter,
+  ]);
+
+  // Toggle row expansion
+  const toggleRowExpansion = (visitorId) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [visitorId]: !prev[visitorId],
+    }));
+  };
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Clear filters
+  const clearFilters = () => {
+    setSearchTerm("");
+    setPhoneFilter("");
+    setNameFilter("");
+    setOfficerNameFilter("");
+    setOfficerDepartmentFilter("");
+    setOfficerDesignationFilter("");
+    setStartTime("");
+    setEndTime("");
+    setPurposeFilter("all");
+    setCurrentPage(1);
+  };
+
+  // Calculate pagination
+  const totalPages = Math.ceil(totalVisitors / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalVisitors);
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pageNumbers.push(i);
+        }
+        pageNumbers.push("...");
+        pageNumbers.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pageNumbers.push(1);
+        pageNumbers.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pageNumbers.push(i);
+        }
+      } else {
+        pageNumbers.push(1);
+        pageNumbers.push("...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pageNumbers.push(i);
+        }
+        pageNumbers.push("...");
+        pageNumbers.push(totalPages);
+      }
+    }
+
+    return pageNumbers;
+  };
+
+  // Handle page change
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber === "..." || pageNumber < 1 || pageNumber > totalPages) {
+      return;
+    }
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Get unique purposes for filters
+  const purposes = useMemo(() => {
+    const purposeSet = new Set();
+    visitors.forEach((visitor) => purposeSet.add(visitor.purpose));
+    return Array.from(purposeSet);
+  }, [visitors]);
+
+  // Get statistics
+  const stats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayVisitors = visitors.filter((v) => {
+      const visitDate = new Date(v.visitTime);
+      return visitDate >= today;
+    }).length;
+
+    return {
+      total: totalVisitors,
+      today: todayVisitors,
+      case: visitors.filter((v) => v.purpose === "case").length,
+      personal: visitors.filter((v) => v.purpose === "personal").length,
+    };
+  }, [visitors, totalVisitors]);
+
   return (
     <div className="space-y-6">
-      <div className="bg-linear-to-r from-green-600 to-green-800 rounded-xl p-6">
-        <div className="flex items-center space-x-4">
-          <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-            <FiUser className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Add New Visitor</h2>
-            <p className="text-gray-200">Register a new visitor appointment</p>
-          </div>
-        </div>
-      </div>
-
       {showSuccess && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -252,96 +618,107 @@ const AddVisitor = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Photo */}
+        {/* Left Column - Add Visitor Form */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className="lg:col-span-1"
         >
           <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">
-              Visitor Photo
-            </h3>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">
+              Add New Visitor
+            </h2>
 
-            {showCamera ? (
-              <div className="space-y-4">
-                <div className="relative rounded-lg overflow-hidden border-2 border-gray-300">
-                  <Webcam
-                    ref={webcamRef}
-                    audio={false}
-                    screenshotFormat="image/jpeg"
-                    className="w-full h-64 object-cover"
-                  />
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={capturePhoto}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            <div className="space-y-4">
+              {/* Main Photo Display Area */}
+              <div className="space-y-3">
+                {photo ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="space-y-3"
                   >
-                    Capture
-                  </button>
-                  <button
-                    onClick={() => setShowCamera(false)}
-                    className="px-4 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : photo ? (
-              <div className="space-y-4">
-                <div className="relative">
-                  <img
-                    src={photo}
-                    alt="Visitor"
-                    className="w-full h-64 object-cover rounded-lg border-2 border-gray-300"
-                  />
-                  <button
-                    onClick={() => setPhoto("")}
-                    className="absolute top-2 right-2 p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
-                  >
-                    <FiX className="h-5 w-5" />
-                  </button>
-                </div>
-                <button
-                  onClick={() => setShowCamera(true)}
-                  className="w-full px-4 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Retake Photo
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="h-64 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-                  <div className="text-center">
-                    <FiCamera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500">No photo captured</p>
+                    <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-100">
+                      <img
+                        src={photo}
+                        alt="Captured Visitor"
+                        className="w-full h-64 object-cover"
+                      />
+                      <div className="absolute top-2 right-2">
+                        <button
+                          type="button"
+                          onClick={retakePhoto}
+                          className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
+                          title="Remove photo"
+                        >
+                          <FiX className="h-5 w-5" />
+                        </button>
+                      </div>
+                      <div className="absolute bottom-2 left-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                        Photo Captured ✓
+                      </div>
+                    </div>
+
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={retakePhoto}
+                        className="px-4 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center font-medium mx-auto"
+                      >
+                        <FiRefreshCw className="h-4 w-4 mr-2" />
+                        Retake Photo
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : cameraError ? (
+                  <div className="space-y-3">
+                    <div className="h-64 flex flex-col items-center justify-center bg-gray-100 rounded-lg border-2 border-gray-300">
+                      <FiCamera className="h-16 w-16 text-gray-400 mb-3" />
+                      <p className="text-gray-500 font-medium">Camera Error</p>
+                      <p className="text-gray-400 text-sm text-center px-4 mt-1">
+                        Please allow camera permissions or check your camera
+                      </p>
+                    </div>
+                    <p className="text-xs text-red-500 text-center">
+                      Camera access is required to capture visitor photos
+                    </p>
                   </div>
-                </div>
-                <button
-                  onClick={() => setShowCamera(true)}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
-                >
-                  <FiCamera className="h-5 w-5 mr-2" />
-                  Capture Photo
-                </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-100">
+                      <Webcam
+                        ref={webcamRef}
+                        audio={false}
+                        screenshotFormat="image/jpeg"
+                        className="w-full h-64 object-cover"
+                        videoConstraints={{
+                          facingMode: "user",
+                          width: { ideal: 640 },
+                          height: { ideal: 480 },
+                        }}
+                        onUserMediaError={() => {
+                          setCameraError(true);
+                          toast.error("Failed to access camera");
+                        }}
+                      />
+                    </div>
+
+                    <div className="text-center mb-2">
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center font-medium mx-auto"
+                      >
+                        <FiCamera className="h-4 w-4 mr-2" />
+                        Capture Photo
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </motion.div>
+            </div>
 
-        {/* Right Column - Form */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="lg:col-span-2"
-        >
-          <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-6">
-              Visitor Information
-            </h3>
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-6">
               {/* Phone Number with Suggestions */}
               <div className="relative">
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -361,35 +738,42 @@ const AddVisitor = () => {
                     {...register("phone", {
                       required: "Mobile number is required",
                       pattern: {
-                        value: /^[0-9+\-\s]+$/,
+                        value: /^[0-9+\-\s()]+$/,
                         message: "Invalid phone number format",
                       },
                       minLength: {
                         value: 10,
                         message: "Phone number must be at least 10 digits",
                       },
+                      validate: (value) => {
+                        const normalized = normalizePhoneNumber(value);
+                        return (
+                          normalized.length >= 10 ||
+                          "Please enter a valid phone number"
+                        );
+                      },
                     })}
-                    className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                    className={`w-full px-4 py-2 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
                       errors.phone
                         ? "border-red-500 focus:border-red-600"
                         : "border-gray-300 focus:border-green-600"
                     }`}
-                    placeholder="+1234567890"
+                    placeholder="Enter phone number"
+                    onBlur={() => setShowPhoneSuggestions(false)}
                   />
                   {phoneChecking && (
-                    <div className="absolute right-3 top-3">
+                    <div className="absolute right-3 top-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                     </div>
                   )}
                 </div>
                 {errors.phone && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {errors.phone.message}
                   </p>
                 )}
 
-                {/* Phone Suggestions */}
                 <AnimatePresence>
                   {showPhoneSuggestions && phoneSuggestions.length > 0 && (
                     <motion.div
@@ -429,7 +813,6 @@ const AddVisitor = () => {
                   )}
                 </AnimatePresence>
 
-                {/* Phone Check Status */}
                 {phoneValue &&
                   phoneValue.length >= 10 &&
                   !phoneChecking &&
@@ -438,7 +821,7 @@ const AddVisitor = () => {
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -5 }}
-                      className="mt-2 text-sm text-gray-500 flex items-center"
+                      className="mt-1 text-sm text-gray-500 flex items-center"
                     >
                       <FiAlertCircle className="w-4 h-4 mr-1" />
                       No previous visits found with this number
@@ -463,7 +846,7 @@ const AddVisitor = () => {
                       message: "Name must be at least 3 characters",
                     },
                   })}
-                  className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                  className={`w-full px-4 py-2 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
                     errors.name
                       ? "border-red-500 focus:border-red-600"
                       : "border-gray-300 focus:border-green-600"
@@ -471,7 +854,7 @@ const AddVisitor = () => {
                   placeholder="John Doe"
                 />
                 {errors.name && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {errors.name.message}
                   </p>
@@ -490,8 +873,8 @@ const AddVisitor = () => {
                   {...register("address", {
                     required: "Address is required",
                   })}
-                  rows={3}
-                  className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                  rows={2}
+                  className={`w-full px-4 py-2 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
                     errors.address
                       ? "border-red-500 focus:border-red-600"
                       : "border-gray-300 focus:border-green-600"
@@ -499,7 +882,7 @@ const AddVisitor = () => {
                   placeholder="123 Main St, City, Country"
                 />
                 {errors.address && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {errors.address.message}
                   </p>
@@ -525,8 +908,8 @@ const AddVisitor = () => {
                   onBlur={() =>
                     setTimeout(() => setShowOfficerDropdown(false), 200)
                   }
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
-                  placeholder="Search officer by name, designation, or department..."
+                  className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
+                  placeholder="Search officer..."
                 />
 
                 {selectedOfficer && (
@@ -539,10 +922,6 @@ const AddVisitor = () => {
                         <div className="text-sm text-green-700">
                           {selectedOfficer.designation} •{" "}
                           {selectedOfficer.department}
-                        </div>
-                        <div className="text-xs text-green-600 mt-1">
-                          BP: {selectedOfficer.bpNumber} • Phone:{" "}
-                          {selectedOfficer.phone}
                         </div>
                       </div>
                       <button
@@ -559,7 +938,6 @@ const AddVisitor = () => {
                   </div>
                 )}
 
-                {/* Officer Search Results */}
                 <AnimatePresence>
                   {showOfficerDropdown && officerResults.length > 0 && (
                     <motion.div
@@ -585,9 +963,6 @@ const AddVisitor = () => {
                           </div>
                           <div className="text-sm text-gray-500 group-hover:text-blue-600">
                             {officer.designation} • {officer.department}
-                          </div>
-                          <div className="text-xs text-gray-400 group-hover:text-blue-500 mt-1">
-                            BP: {officer.bpNumber} • Phone: {officer.phone}
                           </div>
                         </button>
                       ))}
@@ -615,7 +990,7 @@ const AddVisitor = () => {
                   {...register("purpose", {
                     required: "Purpose is required",
                   })}
-                  className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                  className={`w-full px-4 py-2 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
                     errors.purpose
                       ? "border-red-500 focus:border-red-600"
                       : "border-gray-300 focus:border-green-600"
@@ -626,19 +1001,19 @@ const AddVisitor = () => {
                   <option value="personal">Personal</option>
                 </select>
                 {errors.purpose && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {errors.purpose.message}
                   </p>
                 )}
               </div>
 
-              <div className="pt-6 border-t border-gray-300">
+              <div className="pt-4">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   type="submit"
-                  disabled={isLoading || !selectedOfficer}
+                  disabled={isLoading || !selectedOfficer || !photo}
                   className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
@@ -670,6 +1045,526 @@ const AddVisitor = () => {
                 </motion.button>
               </div>
             </form>
+          </div>
+        </motion.div>
+
+        {/* Right Column - Visitor List */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="lg:col-span-2"
+        >
+          <div className="space-y-6">
+            {/* Visitor List Header */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Visitor List
+                    </h2>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats.total}
+                  </p>
+                  <p className="text-sm text-gray-600">Total Visitors</p>
+                </div>
+              </div>
+
+              {/* Search and Filters */}
+              <div className="space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FiSearch className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={handleSearchChange}
+                        className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                        placeholder="Search visitors..."
+                      />
+                      {searchTerm && (
+                        <button
+                          onClick={() => setSearchTerm("")}
+                          className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                          <FiX className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                    >
+                      <FiFilter className="h-4 w-4 mr-2" />
+                      {showFilters ? "Hide" : "Filters"}
+                    </button>
+                    <button
+                      onClick={fetchVisitors}
+                      className="flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                    >
+                      <FiRefreshCw className="h-4 w-4 mr-2" />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter Options */}
+                {showFilters && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="pt-4 border-t border-gray-300 space-y-4"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Phone
+                        </label>
+                        <input
+                          type="text"
+                          value={phoneFilter}
+                          onChange={(e) => setPhoneFilter(e.target.value)}
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                          placeholder="Filter by phone..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Visitor Name
+                        </label>
+                        <input
+                          type="text"
+                          value={nameFilter}
+                          onChange={(e) => setNameFilter(e.target.value)}
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                          placeholder="Filter by name..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Officer Name
+                        </label>
+                        <input
+                          type="text"
+                          value={officerNameFilter}
+                          onChange={(e) => setOfficerNameFilter(e.target.value)}
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                          placeholder="Filter by officer..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Purpose
+                        </label>
+                        <select
+                          value={purposeFilter}
+                          onChange={(e) => setPurposeFilter(e.target.value)}
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                        >
+                          <option value="all">All Purposes</option>
+                          {purposes.map((purpose) => (
+                            <option key={purpose} value={purpose}>
+                              {purpose.charAt(0).toUpperCase() +
+                                purpose.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Time Range Filter
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Start Time
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={startTime}
+                              onChange={(e) => setStartTime(e.target.value)}
+                              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              End Time
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={endTime}
+                              onChange={(e) => setEndTime(e.target.value)}
+                              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Filter visitors who visited between the selected time
+                          range
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <button
+                        onClick={clearFilters}
+                        className="px-3 py-1.5 text-sm text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Clear Filters
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
+            {/* Pagination Controls */}
+            {visitors.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm text-gray-600">Show:</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-1 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <span className="text-sm text-gray-600">per page</span>
+                  </div>
+
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="p-1.5 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Previous page"
+                    >
+                      <FiChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    <div className="flex items-center space-x-1">
+                      {getPageNumbers().map((pageNumber, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handlePageChange(pageNumber)}
+                          disabled={pageNumber === "..."}
+                          className={`min-w-8 h-8 flex items-center justify-center rounded-lg border-2 transition-all duration-300 text-sm ${
+                            pageNumber === currentPage
+                              ? "bg-green-600 text-white border-green-600 font-medium"
+                              : pageNumber === "..."
+                              ? "border-transparent text-gray-500 cursor-default"
+                              : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {pageNumber}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Next page"
+                    >
+                      <FiChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Visitors Table */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-300 overflow-hidden">
+              {listLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                </div>
+              ) : visitors.length === 0 ? (
+                <div className="text-center py-8">
+                  <FiSearch className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <h3 className="text-sm font-medium text-gray-900">
+                    No visitors found
+                  </h3>
+                  <p className="text-gray-600 text-sm mt-1">
+                    {searchTerm ||
+                    phoneFilter ||
+                    nameFilter ||
+                    officerNameFilter ||
+                    purposeFilter !== "all"
+                      ? "Try changing your filters or search term"
+                      : "No visitors have been registered yet"}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-300">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Visitor
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Contact
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Officer
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Visit Time
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {visitors.map((visitor) => (
+                        <React.Fragment key={visitor._id}>
+                          <motion.tr
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="hover:bg-gray-50 cursor-pointer text-sm"
+                            onClick={() => toggleRowExpansion(visitor._id)}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center">
+                                <div className="h-8 w-8 shrink-0">
+                                  {visitor.photo ? (
+                                    <img
+                                      src={visitor.photo}
+                                      alt={visitor.name}
+                                      className="h-8 w-8 rounded-full object-cover border border-gray-300"
+                                    />
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                                      <span className="text-green-600 font-bold text-xs">
+                                        {visitor.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="ml-3">
+                                  <div className="font-medium text-gray-900">
+                                    {highlightMatchedText(
+                                      visitor.name,
+                                      searchTerms
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-gray-500 capitalize">
+                                    {highlightMatchedText(
+                                      visitor.purpose,
+                                      searchTerms
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-900">
+                                {highlightMatchedText(
+                                  visitor.phone,
+                                  searchTerms
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate max-w-37.5">
+                                {highlightMatchedText(
+                                  visitor.address,
+                                  searchTerms
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-900">
+                                {highlightMatchedText(
+                                  visitor.officer?.name,
+                                  searchTerms
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {highlightMatchedText(
+                                  visitor.officer?.designation,
+                                  searchTerms
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-900">
+                                {format(
+                                  parseISO(visitor.visitTime),
+                                  "MMM dd yyyy"
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {format(
+                                  parseISO(visitor.visitTime),
+                                  "hh:mm:ss a"
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleRowExpansion(visitor._id);
+                                }}
+                                className="px-2 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                              >
+                                {expandedRows[visitor._id] ? "Hide" : "View"}
+                              </button>
+                            </td>
+                          </motion.tr>
+
+                          {/* Expanded Row Details */}
+                          {expandedRows[visitor._id] && (
+                            <motion.tr
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              className="bg-gray-50"
+                            >
+                              <td colSpan="5" className="px-4 py-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-900 mb-2">
+                                      Visitor Details
+                                    </h4>
+                                    <div className="space-y-1 text-sm">
+                                      <div className="flex items-center">
+                                        <FiUser className="h-3 w-3 text-gray-400 mr-2" />
+                                        <span className="text-gray-600">
+                                          Name:{" "}
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                          {highlightMatchedText(
+                                            visitor.name,
+                                            searchTerms
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center">
+                                        <FiPhone className="h-3 w-3 text-gray-400 mr-2" />
+                                        <span className="text-gray-600">
+                                          Phone:{" "}
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                          {highlightMatchedText(
+                                            visitor.phone,
+                                            searchTerms
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-start">
+                                        <FiMapPin className="h-3 w-3 text-gray-400 mr-2 mt-0.5" />
+                                        <div>
+                                          <span className="text-gray-600">
+                                            Address:{" "}
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {highlightMatchedText(
+                                              visitor.address,
+                                              searchTerms
+                                            )}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-900 mb-2">
+                                      Officer Details
+                                    </h4>
+                                    <div className="space-y-1 text-sm">
+                                      <div className="flex items-center">
+                                        <FiUser className="h-3 w-3 text-gray-400 mr-2" />
+                                        <span className="text-gray-600">
+                                          Officer:{" "}
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                          {highlightMatchedText(
+                                            visitor.officer?.name,
+                                            searchTerms
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center">
+                                        <FiBriefcase className="h-3 w-3 text-gray-400 mr-2" />
+                                        <span className="text-gray-600">
+                                          Designation:{" "}
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                          {highlightMatchedText(
+                                            visitor.officer?.designation,
+                                            searchTerms
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center">
+                                        <FiBriefcase className="h-3 w-3 text-gray-400 mr-2" />
+                                        <span className="text-gray-600">
+                                          Department:{" "}
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                          {highlightMatchedText(
+                                            visitor.officer?.department,
+                                            searchTerms
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {visitor.photo && (
+                                    <div className="md:col-span-2">
+                                      <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                                        Visitor Photo
+                                      </h4>
+                                      <div className="flex justify-center">
+                                        <img
+                                          src={visitor.photo}
+                                          alt={visitor.name}
+                                          className="h-full w-64 object-contain"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </motion.tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Summary */}
+            <div className="text-center text-sm text-gray-600">
+              Showing {visitors.length} visitors on page {currentPage} of{" "}
+              {totalPages}
+              {searchTerms.length > 0 && (
+                <span className="ml-2 text-yellow-600 font-medium">
+                  • {searchTerms.length} search term
+                  {searchTerms.length > 1 ? "s" : ""} active
+                </span>
+              )}
+            </div>
           </div>
         </motion.div>
       </div>

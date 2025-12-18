@@ -60,7 +60,6 @@ exports.addVisitor = async (req, res) => {
 };
 
 // Get all visitors with search and filters
-// Get all visitors with search and filters
 exports.getAllVisitors = async (req, res) => {
   try {
     const {
@@ -68,12 +67,15 @@ exports.getAllVisitors = async (req, res) => {
       phone,
       name,
       officerName,
-      officerDesignation, // Add this
-      officerDepartment, // Add this
+      officerDesignation,
+      officerDepartment,
       startTime,
       endTime,
       purpose,
-      multiSearch, // Add this for comma-separated search
+      multiSearch,
+      // Pagination parameters
+      page = 1,
+      limit = 10,
     } = req.query;
 
     let query = {};
@@ -93,7 +95,7 @@ exports.getAllVisitors = async (req, res) => {
       query["officer.name"] = { $regex: officerName, $options: "i" };
     }
 
-    // Officer designation filter - ADD THIS
+    // Officer designation filter
     if (officerDesignation) {
       query["officer.designation"] = {
         $regex: officerDesignation,
@@ -101,7 +103,7 @@ exports.getAllVisitors = async (req, res) => {
       };
     }
 
-    // Officer department filter - ADD THIS
+    // Officer department filter
     if (officerDepartment) {
       query["officer.department"] = {
         $regex: officerDepartment,
@@ -145,8 +147,8 @@ exports.getAllVisitors = async (req, res) => {
             { address: regex },
             { purpose: regex },
             { "officer.name": regex },
-            { "officer.designation": regex }, // Add this
-            { "officer.department": regex } // Add this
+            { "officer.designation": regex },
+            { "officer.department": regex }
           );
         });
 
@@ -161,24 +163,54 @@ exports.getAllVisitors = async (req, res) => {
         { address: { $regex: search, $options: "i" } },
         { purpose: { $regex: search, $options: "i" } },
         { "officer.name": { $regex: search, $options: "i" } },
-        { "officer.designation": { $regex: search, $options: "i" } }, // Add this
-        { "officer.department": { $regex: search, $options: "i" } }, // Add this
+        { "officer.designation": { $regex: search, $options: "i" } },
+        { "officer.department": { $regex: search, $options: "i" } },
       ];
     }
 
+    // Parse pagination parameters
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Get total count first
+    const total = await Visitor.countDocuments(query);
+
+    // Calculate total pages
+    const totalPages = Math.ceil(total / limitNumber);
+
+    // Get paginated visitors
     const visitors = await Visitor.find(query)
       .populate("officer.officerId", "name designation department phone")
       .sort({ visitTime: -1 })
+      .skip(skip)
+      .limit(limitNumber)
       .select("-__v");
+
+    // Calculate current page range
+    const startItem = skip + 1;
+    const endItem = Math.min(skip + limitNumber, total);
 
     res.json({
       success: true,
       count: visitors.length,
+      total: total,
+      page: pageNumber,
+      pages: totalPages,
+      limit: limitNumber,
+      hasNextPage: pageNumber < totalPages,
+      hasPrevPage: pageNumber > 1,
+      startItem,
+      endItem,
       visitors,
     });
   } catch (error) {
     console.error("Error fetching visitors:", error);
-    res.status(500).json({ error: "Failed to fetch visitors" });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch visitors",
+      message: error.message,
+    });
   }
 };
 
@@ -187,24 +219,58 @@ exports.checkPhoneNumber = async (req, res) => {
   try {
     const { phone } = req.params;
 
-    // Remove .distinct("name") and get the full documents
-    const visitors = await Visitor.find({ phone })
+    // Helper function to normalize phone number
+    const normalizePhone = (phoneNumber) => {
+      if (!phoneNumber) return "";
+      // Remove all non-digit characters
+      let digits = phoneNumber.toString().replace(/\D/g, "");
+
+      // Remove common country codes
+      if (digits.startsWith("88") && digits.length > 10) {
+        // Remove Bangladesh country code (+88 or 88)
+        digits = digits.substring(2);
+      } else if (digits.startsWith("1") && digits.length === 11) {
+        // For US/Canada, we could optionally remove the 1
+        // digits = digits.substring(1);
+      }
+
+      // Return the normalized number
+      return digits;
+    };
+
+    // Normalize the search phone number
+    const normalizedSearchPhone = normalizePhone(phone);
+
+    if (!normalizedSearchPhone || normalizedSearchPhone.length < 10) {
+      return res.json({
+        exists: false,
+        message: "Invalid phone number format",
+      });
+    }
+
+    // Get all visitors and filter by normalized phone number
+    const allVisitors = await Visitor.find({})
       .sort({ visitTime: -1 })
-      .limit(5)
       .select("name address phone visitTime");
 
-    if (visitors.length === 0) {
+    // Filter visitors by normalized phone number comparison
+    const matchingVisitors = allVisitors.filter((visitor) => {
+      const visitorPhoneNormalized = normalizePhone(visitor.phone);
+      return visitorPhoneNormalized === normalizedSearchPhone;
+    });
+
+    if (matchingVisitors.length === 0) {
       return res.json({
         exists: false,
         message: "No previous visits found with this phone number",
       });
     }
 
-    // Optional: Get unique visitors by name to avoid duplicates
+    // Get unique visitors by name to avoid duplicates
     const uniqueVisitors = [];
     const seenNames = new Set();
 
-    visitors.forEach((visitor) => {
+    matchingVisitors.forEach((visitor) => {
       if (!seenNames.has(visitor.name)) {
         seenNames.add(visitor.name);
         uniqueVisitors.push({
@@ -218,7 +284,7 @@ exports.checkPhoneNumber = async (req, res) => {
 
     res.json({
       exists: true,
-      visitors: uniqueVisitors,
+      visitors: uniqueVisitors.slice(0, 5), // Limit to 5 results
     });
   } catch (error) {
     console.error("Error checking phone number:", error);

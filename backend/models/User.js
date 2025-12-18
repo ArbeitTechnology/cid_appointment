@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema({
   // User Type
   userType: {
     type: String,
-    enum: ["admin", "user"],
+    enum: ["super_admin", "admin", "user"],
     default: "user",
   },
 
@@ -68,13 +68,11 @@ const userSchema = new mongoose.Schema({
 userSchema.pre("save", async function (next) {
   const user = this;
 
-  // Set first user as admin
+  // Set first user as super_admin
   if (user.isNew) {
     const userCount = await mongoose.models.User.countDocuments();
     if (userCount === 0) {
-      user.userType = "admin";
-    } else {
-      user.userType = "user";
+      user.userType = "super_admin";
     }
   }
 
@@ -96,11 +94,20 @@ userSchema.methods.generateAuthToken = async function () {
 };
 
 // Find user by credentials
+// Find user by credentials
 userSchema.statics.findByCredentials = async (email, password) => {
   const user = await User.findOne({ email });
   if (!user) {
     throw new Error("Invalid login credentials");
   }
+
+  // Check if user is inactive
+  if (user.status === "inactive") {
+    throw new Error(
+      "Your account has been deactivated. Please contact the administrator."
+    );
+  }
+
   const isPasswordMatch = await bcrypt.compare(password, user.password);
   if (!isPasswordMatch) {
     throw new Error("Invalid login credentials");

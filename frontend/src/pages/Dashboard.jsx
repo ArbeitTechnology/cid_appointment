@@ -1,14 +1,13 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiLogOut } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
-
+import photo from "../../public/vite.png";
 // Components
 import Sidebar from "../components/Dashboard/Sidebar";
-import Header from "../components/Dashboard/Header";
 import MobileHeader from "../components/Dashboard/MobileHeader";
 import Settings from "../components/Dashboard/Settings";
 import DashboardHome from "./DashboardHome";
@@ -16,8 +15,15 @@ import OfficerList from "../components/officer/OfficerList";
 import AddOfficer from "../components/officer/AddOfficer";
 import AddVisitor from "../components/Visitor/AddVisitor";
 import VisitorList from "../components/Visitor/VisitorList";
+import AdminPanel from "./AdminPanel";
+import Footer from "../components/Dashboard/Footer";
 
 const TabContent = React.memo(({ activeTab, user }) => {
+  // If user is admin/super admin and on dashboard tab, show AdminPanel instead of DashboardHome
+  const shouldShowAdminPanel =
+    (user?.userType === "admin" || user?.userType === "super_admin") &&
+    (activeTab === "dashboard" || activeTab === "admin-panel");
+
   switch (activeTab) {
     case "add-visitor":
       return <AddVisitor />;
@@ -27,9 +33,15 @@ const TabContent = React.memo(({ activeTab, user }) => {
       return <AddOfficer />;
     case "officer-list":
       return <OfficerList />;
+    case "admin-panel":
+      return <AdminPanel />;
     case "settings":
       return <Settings user={user} />;
     default:
+      // For admin users, show AdminPanel on dashboard, otherwise show DashboardHome
+      if (shouldShowAdminPanel) {
+        return <AdminPanel />;
+      }
       return <DashboardHome user={user} />;
   }
 });
@@ -40,10 +52,19 @@ const Dashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem("dashboardActiveTab") || "dashboard";
-  });
+  // Set default tab based on user type
+  const getDefaultTab = () => {
+    const savedTab = localStorage.getItem("dashboardActiveTab");
+    if (savedTab) return savedTab;
 
+    // For admin/super admin, default to dashboard (which will show AdminPanel)
+    if (user?.userType === "admin" || user?.userType === "super_admin") {
+      return "dashboard";
+    }
+    return "dashboard";
+  };
+
+  const [activeTab, setActiveTab] = useState(getDefaultTab);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -73,6 +94,14 @@ const Dashboard = () => {
       localStorage.setItem("dashboardActiveTab", activeTab);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    // Update active tab when user changes or on initial load
+    const defaultTab = getDefaultTab();
+    if (activeTab !== defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [user]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -124,30 +153,38 @@ const Dashboard = () => {
         }`}
       >
         {/* Sidebar */}
-        <Sidebar
-          isMobile={isMobile}
-          isMobileOpen={isMobileOpen}
-          sidebarOpen={sidebarOpen}
-          activeTab={activeTab}
-          user={user}
-          handleTabChange={handleTabChange}
-          toggleSidebar={toggleSidebar}
-          setIsMobileOpen={setIsMobileOpen}
-          handleLogout={handleLogout}
-          isHovered={isHovered}
-          setIsHovered={setIsHovered}
-        />
+        <div className="relative z-10">
+          <Sidebar
+            isMobile={isMobile}
+            isMobileOpen={isMobileOpen}
+            sidebarOpen={sidebarOpen}
+            activeTab={activeTab}
+            user={user}
+            handleTabChange={handleTabChange}
+            toggleSidebar={toggleSidebar}
+            setIsMobileOpen={setIsMobileOpen}
+            handleLogout={handleLogout}
+            isHovered={isHovered}
+            setIsHovered={setIsHovered}
+          />
+        </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 h-full overflow-auto relative bg-gray-50">
-          {/* Content Header */}
-          <Header activeTab={activeTab} user={user} />
+        <div className="flex-1 h-full overflow-auto relative bg-gray-50 flex flex-col z-10">
+          {/* Watermark */}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+            <img
+              src={photo}
+              alt="Watermark"
+              className="opacity-10 w-64 md:w-80 select-none"
+            />
+          </div>
 
-          {/* Rendered Content */}
-          <div className="p-6">
+          {/* Main content area */}
+          <div className="flex-1 p-6 relative z-10 overflow-auto">
             <AnimatePresence mode="wait">
               <motion.div
-                key={activeTab}
+                key={activeTab + (user?.userType || "")} // Add user type to key to force re-render
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -156,6 +193,11 @@ const Dashboard = () => {
                 <TabContent activeTab={activeTab} user={user} />
               </motion.div>
             </AnimatePresence>
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="relative z-10 bg-gray-50 border-t border-gray-200 px-6 py-4 mt-auto">
+            <Footer activeTab={activeTab} />
           </div>
         </div>
       </div>

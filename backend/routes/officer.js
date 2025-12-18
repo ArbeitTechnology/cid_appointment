@@ -14,7 +14,10 @@ router.get("/all", officerController.getAllOfficers);
 
 // Update officer status
 router.put("/:officerId/status", officerController.updateOfficerStatus);
+router.put("/:officerId", officerController.updateOfficer);
 
+// Delete officer
+router.delete("/:officerId", officerController.deleteOfficer);
 // Search officers (for visitor form)
 router.get("/search", officerController.searchOfficers);
 
