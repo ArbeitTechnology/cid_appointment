@@ -51,7 +51,7 @@ const Settings = ({ user }) => {
       };
 
       const response = await axios.put(
-        "http://localhost:5000/api/auth/profile",
+        "https://api.appoinment.arbeitonline.top/api/auth/profile",
         updatedData,
         {
           headers: {
@@ -82,11 +82,15 @@ const Settings = ({ user }) => {
     const loadingToast = toast.loading("Changing password...");
 
     try {
-      await axios.put("http://localhost:5000/api/auth/change-password", data, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
+      await axios.put(
+        "https://api.appoinment.arbeitonline.top/api/auth/change-password",
+        data,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
 
       toast.dismiss(loadingToast);
       toast.success("Password changed successfully! Please login again.");

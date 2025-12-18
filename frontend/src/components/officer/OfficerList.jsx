@@ -100,7 +100,7 @@ const OfficerList = () => {
       }
 
       const response = await axios.get(
-        "http://localhost:5000/api/officers/all",
+        "https://api.appoinment.arbeitonline.top/api/officers/all",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -184,7 +184,7 @@ const OfficerList = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/officers/${officerId}/status`,
+        `https://api.appoinment.arbeitonline.top/api/officers/${officerId}/status`,
         { status: newStatus },
         {
           headers: {
@@ -213,11 +213,14 @@ const OfficerList = () => {
 
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:5000/api/officers/${officerId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await axios.delete(
+        `https://api.appoinment.arbeitonline.top/api/officers/${officerId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       toast.success("Officer deleted successfully");
       fetchOfficers(); // Refresh list
@@ -271,7 +274,7 @@ const OfficerList = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/officers/${officerId}`,
+        `https://api.appoinment.arbeitonline.top/api/officers/${officerId}`,
         editFormData,
         {
           headers: {

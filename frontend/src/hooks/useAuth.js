@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(
-        "http://localhost:5000/api/auth/admin/all-users",
+        "https://api.appoinment.arbeitonline.top/api/auth/admin/all-users",
         { headers: { Authorization: `Bearer ${token}` } }
       );
       return { success: true, data: response.data };

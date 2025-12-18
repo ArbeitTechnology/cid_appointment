@@ -36,7 +36,7 @@ const ResetPassword = () => {
     setIsLoading(true);
     try {
       await axios.post(
-        `http://localhost:5000/api/auth/reset-password/${token}`,
+        `https://api.appoinment.arbeitonline.top/api/auth/reset-password/${token}`,
         data
       );
       setPasswordReset(true);

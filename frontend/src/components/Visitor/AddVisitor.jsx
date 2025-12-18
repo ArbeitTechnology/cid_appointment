@@ -153,7 +153,7 @@ const AddVisitor = () => {
       if (endTime) params.endTime = endTime;
 
       const response = await axios.get(
-        "http://localhost:5000/api/visitors/all",
+        "https://api.appoinment.arbeitonline.top/api/visitors/all",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -235,7 +235,7 @@ const AddVisitor = () => {
       try {
         const token = localStorage.getItem("token");
         const response = await axios.get(
-          "http://localhost:5000/api/officers/search",
+          "https://api.appoinment.arbeitonline.top/api/officers/search",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -287,7 +287,7 @@ const AddVisitor = () => {
         try {
           const token = localStorage.getItem("token");
           const response = await axios.get(
-            `http://localhost:5000/api/visitors/check-phone/${normalizedPhone}`,
+            `https://api.appoinment.arbeitonline.top/api/visitors/check-phone/${normalizedPhone}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -387,7 +387,7 @@ const AddVisitor = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "http://localhost:5000/api/visitors/add",
+        "https://api.appoinment.arbeitonline.top/api/visitors/add",
         {
           ...data,
           phone: normalizedPhone,

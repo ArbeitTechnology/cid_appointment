@@ -117,7 +117,7 @@ const VisitorList = () => {
       if (endTime) params.endTime = endTime;
 
       const response = await axios.get(
-        "http://localhost:5000/api/visitors/all",
+        "https://api.appoinment.arbeitonline.top/api/visitors/all",
         {
           headers: {
             Authorization: `Bearer ${token}`,

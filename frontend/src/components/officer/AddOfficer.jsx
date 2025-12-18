@@ -35,7 +35,7 @@ const AddOfficer = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        "http://localhost:5000/api/officers/add",
+        "https://api.appoinment.arbeitonline.top/api/officers/add",
         data,
         {
           headers: {

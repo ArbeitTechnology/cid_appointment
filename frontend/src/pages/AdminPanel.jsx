@@ -35,7 +35,7 @@ const AdminPanel = () => {
       const token = localStorage.getItem("token");
 
       const usersResponse = await axios.get(
-        "http://localhost:5000/api/auth/admin/all-users",
+        "https://api.appoinment.arbeitonline.top/api/auth/admin/all-users",
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setAllUsers(usersResponse.data);
@@ -53,7 +53,7 @@ const AdminPanel = () => {
       const token = localStorage.getItem("token");
 
       await axios.put(
-        `http://localhost:5000/api/auth/admin/update-role/${userId}`,
+        `https://api.appoinment.arbeitonline.top/api/auth/admin/update-role/${userId}`,
         { userType: newRole },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -81,7 +81,7 @@ const AdminPanel = () => {
       const token = localStorage.getItem("token");
 
       await axios.put(
-        `http://localhost:5000/api/auth/admin/update-status/${userId}`,
+        `https://api.appoinment.arbeitonline.top/api/auth/admin/update-status/${userId}`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
