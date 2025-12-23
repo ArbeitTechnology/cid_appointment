@@ -41,6 +41,7 @@ exports.addVisitor = async (req, res) => {
         name: officer.name,
         designation: officer.designation,
         department: officer.department,
+        status: officer.status,
       },
       photo: photo || "",
       visitTime: new Date(),
@@ -60,6 +61,7 @@ exports.addVisitor = async (req, res) => {
 };
 
 // Get all visitors with search and filters
+// visitorController.js - Fixed getAllVisitors function
 exports.getAllVisitors = async (req, res) => {
   try {
     const {
@@ -72,8 +74,8 @@ exports.getAllVisitors = async (req, res) => {
       startTime,
       endTime,
       purpose,
+      status,
       multiSearch,
-      // Pagination parameters
       page = 1,
       limit = 10,
     } = req.query;
@@ -81,50 +83,66 @@ exports.getAllVisitors = async (req, res) => {
     let query = {};
 
     // Phone filter
-    if (phone) {
-      query.phone = { $regex: phone, $options: "i" };
-    }
+    if (phone) query.phone = { $regex: phone, $options: "i" };
 
     // Name filter
-    if (name) {
-      query.name = { $regex: name, $options: "i" };
-    }
+    if (name) query.name = { $regex: name, $options: "i" };
 
-    // Officer name filter
-    if (officerName) {
+    // Officer filters - FIXED: Always apply officer filters
+    if (officerName)
       query["officer.name"] = { $regex: officerName, $options: "i" };
-    }
-
-    // Officer designation filter
-    if (officerDesignation) {
+    if (officerDesignation)
       query["officer.designation"] = {
         $regex: officerDesignation,
         $options: "i",
       };
-    }
-
-    // Officer department filter
-    if (officerDepartment) {
+    if (officerDepartment)
       query["officer.department"] = {
         $regex: officerDepartment,
         $options: "i",
       };
-    }
 
     // Purpose filter
-    if (purpose && ["case", "personal"].includes(purpose)) {
+    if (purpose && ["case", "personal"].includes(purpose))
       query.purpose = purpose;
-    }
 
-    // Time range filter
-    if (startTime || endTime) {
-      query.visitTime = {};
-      if (startTime) {
-        query.visitTime.$gte = new Date(startTime);
+    // Officer status filter - CORRECTED to use populated officer status
+    if (status && ["active", "inactive"].includes(status)) {
+      // Store status filter for post-population filtering
+      req.statusFilter = status;
+    }
+    // In visitorController.js - Update the time range filter section:
+    if (startTime && endTime) {
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
+
+      // Ensure we're comparing dates correctly
+      if (!startTime.includes("T") || startTime.length === 10) {
+        startDate.setHours(0, 0, 0, 0);
       }
-      if (endTime) {
-        query.visitTime.$lte = new Date(endTime);
+
+      if (!endTime.includes("T") || endTime.length === 10) {
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // If specific time is provided, use it as-is
+        endDate.setSeconds(59, 999);
       }
+
+      query.visitTime = { $gte: startDate, $lte: endDate };
+    } else if (startTime) {
+      const startDate = new Date(startTime);
+      if (!startTime.includes("T") || startTime.length === 10) {
+        startDate.setHours(0, 0, 0, 0);
+      }
+      query.visitTime = { $gte: startDate };
+    } else if (endTime) {
+      const endDate = new Date(endTime);
+      if (!endTime.includes("T") || endTime.length === 10) {
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate.setSeconds(59, 999);
+      }
+      query.visitTime = { $lte: endDate };
     }
 
     // Handle comma-separated multi-search
@@ -133,14 +151,10 @@ exports.getAllVisitors = async (req, res) => {
         .split(",")
         .map((term) => term.trim())
         .filter((term) => term);
-
       if (searchTerms.length > 0) {
         const orConditions = [];
-
         searchTerms.forEach((term) => {
-          // Create case-insensitive regex for each term
           const regex = new RegExp(term, "i");
-
           orConditions.push(
             { name: regex },
             { phone: regex },
@@ -151,50 +165,63 @@ exports.getAllVisitors = async (req, res) => {
             { "officer.department": regex }
           );
         });
-
         query.$or = orConditions;
       }
-    }
-    // General search across multiple fields (backward compatible)
-    else if (search) {
+    } else if (search) {
+      const regex = new RegExp(search, "i");
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { address: { $regex: search, $options: "i" } },
-        { purpose: { $regex: search, $options: "i" } },
-        { "officer.name": { $regex: search, $options: "i" } },
-        { "officer.designation": { $regex: search, $options: "i" } },
-        { "officer.department": { $regex: search, $options: "i" } },
+        { name: regex },
+        { phone: regex },
+        { address: regex },
+        { purpose: regex },
+        { "officer.name": regex },
+        { "officer.designation": regex },
+        { "officer.department": regex },
       ];
     }
 
-    // Parse pagination parameters
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const skip = (pageNumber - 1) * limitNumber;
 
-    // Get total count first
     const total = await Visitor.countDocuments(query);
-
-    // Calculate total pages
     const totalPages = Math.ceil(total / limitNumber);
 
-    // Get paginated visitors
     const visitors = await Visitor.find(query)
-      .populate("officer.officerId", "name designation department phone")
+      .populate({
+        path: "officer.officerId",
+        select: "name designation department phone bpNumber status",
+        model: "Officer",
+      })
       .sort({ visitTime: -1 })
       .skip(skip)
       .limit(limitNumber)
       .select("-__v");
+    let filteredVisitors = visitors;
+    if (req.statusFilter) {
+      filteredVisitors = visitors.filter((visitor) => {
+        const visitorObj = visitor.toObject();
+        const officerStatus =
+          visitorObj.officer?.officerId?.status || visitorObj.officer?.status;
+        return officerStatus === req.statusFilter;
+      });
+    }
 
-    // Calculate current page range
+    const transformedVisitors = filteredVisitors.map((visitor) => {
+      const visitorObj = visitor.toObject();
+      // Ensure current officer status is used
+      if (visitorObj.officer && visitorObj.officer.officerId) {
+        visitorObj.officer.status = visitorObj.officer.officerId.status;
+      }
+      return visitorObj;
+    });
     const startItem = skip + 1;
     const endItem = Math.min(skip + limitNumber, total);
 
     res.json({
       success: true,
       count: visitors.length,
-      total: total,
+      total,
       page: pageNumber,
       pages: totalPages,
       limit: limitNumber,
@@ -202,7 +229,7 @@ exports.getAllVisitors = async (req, res) => {
       hasPrevPage: pageNumber > 1,
       startItem,
       endItem,
-      visitors,
+      visitors: transformedVisitors,
     });
   } catch (error) {
     console.error("Error fetching visitors:", error);

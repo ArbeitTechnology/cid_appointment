@@ -14,6 +14,7 @@ import {
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 
 const ForgotPassword = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const {
@@ -25,10 +26,7 @@ const ForgotPassword = () => {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      await axios.post(
-        "https://api.appoinment.arbeitonline.top/api/auth/forgot-password",
-        data
-      );
+      await axios.post(`${BASE_URL}/auth/forgot-password`, data);
       setEmailSent(true);
       toast.success("Password reset link sent to your email!");
     } catch (error) {

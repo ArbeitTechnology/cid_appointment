@@ -16,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 const ResetPassword = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const { token } = useParams();
   const [isLoading, setIsLoading] = useState(false);
   const [passwordReset, setPasswordReset] = useState(false);
@@ -35,10 +36,7 @@ const ResetPassword = () => {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      await axios.post(
-        `https://api.appoinment.arbeitonline.top/api/auth/reset-password/${token}`,
-        data
-      );
+      await axios.post(`${BASE_URL}/auth/reset-password/${token}`, data);
       setPasswordReset(true);
       toast.success("Password reset successfully!");
     } catch (error) {

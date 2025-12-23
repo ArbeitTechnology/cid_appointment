@@ -15,6 +15,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 
 const Login = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
@@ -45,10 +46,7 @@ const Login = () => {
     const loadingToast = toast.loading("Signing you in...");
 
     try {
-      const response = await axios.post(
-        "https://api.appoinment.arbeitonline.top/api/auth/login",
-        data
-      );
+      const response = await axios.post(`${BASE_URL}/auth/login`, data);
 
       // Save email if "Remember Me" is checked
       if (rememberMe) {

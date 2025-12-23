@@ -39,6 +39,10 @@ const visitorSchema = new mongoose.Schema({
       type: String,
       required: true,
     },
+    status: {
+      type: String,
+      required: true,
+    },
   },
   photo: {
     type: String, // base64 encoded image

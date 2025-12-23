@@ -16,6 +16,7 @@ import {
 } from "react-icons/fi";
 
 const AddOfficer = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -34,15 +35,11 @@ const AddOfficer = () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.post(
-        "https://api.appoinment.arbeitonline.top/api/officers/add",
-        data,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await axios.post(`${BASE_URL}/officers/add`, data, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       toast.success("Officer added successfully!");
       setShowSuccess(true);

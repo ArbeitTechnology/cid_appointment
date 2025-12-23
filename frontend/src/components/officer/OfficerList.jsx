@@ -22,6 +22,7 @@ import {
 } from "react-icons/fi";
 
 const OfficerList = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -99,15 +100,12 @@ const OfficerList = () => {
         if (designationFilter) params.designation = designationFilter;
       }
 
-      const response = await axios.get(
-        "https://api.appoinment.arbeitonline.top/api/officers/all",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params,
-        }
-      );
+      const response = await axios.get(`${BASE_URL}/officers/all`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params,
+      });
 
       setOfficers(response.data.officers || []);
       setTotalOfficers(response.data.total || 0);
@@ -184,7 +182,7 @@ const OfficerList = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `https://api.appoinment.arbeitonline.top/api/officers/${officerId}/status`,
+        `${BASE_URL}/officers/${officerId}/status`,
         { status: newStatus },
         {
           headers: {
@@ -213,14 +211,11 @@ const OfficerList = () => {
 
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(
-        `https://api.appoinment.arbeitonline.top/api/officers/${officerId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await axios.delete(`${BASE_URL}/officers/${officerId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       toast.success("Officer deleted successfully");
       fetchOfficers(); // Refresh list
@@ -273,15 +268,11 @@ const OfficerList = () => {
   const updateOfficer = async (officerId) => {
     try {
       const token = localStorage.getItem("token");
-      await axios.put(
-        `https://api.appoinment.arbeitonline.top/api/officers/${officerId}`,
-        editFormData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await axios.put(`${BASE_URL}/officers/${officerId}`, editFormData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       toast.success("Officer updated successfully");
       setEditingOfficerId(null);

@@ -11,7 +11,8 @@ router.post("/add", officerController.addOfficer);
 
 // Get all officers with search
 router.get("/all", officerController.getAllOfficers);
-
+router.get("/designations", officerController.getUniqueDesignations);
+router.get("/by-designation", officerController.getOfficersByDesignation);
 // Update officer status
 router.put("/:officerId/status", officerController.updateOfficerStatus);
 router.put("/:officerId", officerController.updateOfficer);

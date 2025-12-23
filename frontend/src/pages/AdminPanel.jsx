@@ -18,6 +18,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 const AdminPanel = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const { user } = useAuth();
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +36,7 @@ const AdminPanel = () => {
       const token = localStorage.getItem("token");
 
       const usersResponse = await axios.get(
-        "https://api.appoinment.arbeitonline.top/api/auth/admin/all-users",
+        `${BASE_URL}/auth/admin/all-users`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setAllUsers(usersResponse.data);
@@ -53,7 +54,7 @@ const AdminPanel = () => {
       const token = localStorage.getItem("token");
 
       await axios.put(
-        `https://api.appoinment.arbeitonline.top/api/auth/admin/update-role/${userId}`,
+        `${BASE_URL}/auth/admin/update-role/${userId}`,
         { userType: newRole },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -81,7 +82,7 @@ const AdminPanel = () => {
       const token = localStorage.getItem("token");
 
       await axios.put(
-        `https://api.appoinment.arbeitonline.top/api/auth/admin/update-status/${userId}`,
+        `${BASE_URL}/auth/admin/update-status/${userId}`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );

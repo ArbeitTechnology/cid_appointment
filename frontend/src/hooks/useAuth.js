@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -106,10 +107,9 @@ export const AuthProvider = ({ children }) => {
   const getAllUsers = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(
-        "https://api.appoinment.arbeitonline.top/api/auth/admin/all-users",
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await axios.get(`${BASE_URL}/auth/admin/all-users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       return { success: true, data: response.data };
     } catch (error) {
       const errorMessage =

@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 
 const Register = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
@@ -41,14 +42,11 @@ const Register = () => {
     const loadingToast = toast.loading("Creating your account...");
 
     try {
-      const response = await axios.post(
-        "https://api.appoinment.arbeitonline.top/api/auth/register",
-        {
-          name: data.name,
-          email: data.email,
-          password: data.password,
-        }
-      );
+      const response = await axios.post(`${BASE_URL}/auth/register`, {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+      });
 
       toast.dismiss(loadingToast);
 

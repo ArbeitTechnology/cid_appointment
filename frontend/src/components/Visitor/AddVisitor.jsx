@@ -33,11 +33,12 @@ import Webcam from "react-webcam";
 import { format, parseISO } from "date-fns";
 
 const AddVisitor = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   // Add Visitor States
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [photo, setPhoto] = useState("");
-  const [officerSearch, setOfficerSearch] = useState("");
+  const [officerSelectionSearch, setOfficerSelectionSearch] = useState(""); // CHANGED
   const [officerResults, setOfficerResults] = useState([]);
   const [selectedOfficer, setSelectedOfficer] = useState(null);
   const [showOfficerDropdown, setShowOfficerDropdown] = useState(false);
@@ -63,10 +64,24 @@ const AddVisitor = () => {
   const [expandedRows, setExpandedRows] = useState({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
+  // Add these new states
+  const [designationSearch, setDesignationSearch] = useState("");
+  const [selectedDesignation, setSelectedDesignation] = useState("");
+  const [showDesignationDropdown, setShowDesignationDropdown] = useState(false);
+  const [designationFilter, setDesignationFilter] = useState("");
+  const [officersByDesignation, setOfficersByDesignation] = useState([]);
+  const [uniqueDesignations, setUniqueDesignations] = useState([]);
+  const [filteredDesignations, setFilteredDesignations] = useState([]);
+  const [filteredOfficers, setFilteredOfficers] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("all");
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalVisitors, setTotalVisitors] = useState(0);
+
+  const officerInputRef = useRef(null);
+  const designationInputRef = useRef(null);
 
   const {
     register,
@@ -111,23 +126,62 @@ const AddVisitor = () => {
     officerDepartmentFilter,
     officerDesignationFilter,
     purposeFilter,
+    statusFilter,
     startTime,
     endTime,
   ]);
 
-  // Fetch visitors with debounced search
+  const formatDateTimeForAPI = (dateTimeString) => {
+    if (!dateTimeString) return "";
+    const date = new Date(dateTimeString);
+    const localTime = new Date(
+      date.getTime() - date.getTimezoneOffset() * 60000
+    );
+    return localTime.toISOString().slice(0, 19);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        officerInputRef.current &&
+        !officerInputRef.current.contains(event.target)
+      ) {
+        setShowOfficerDropdown(false);
+      }
+      if (
+        designationInputRef.current &&
+        !designationInputRef.current.contains(event.target)
+      ) {
+        setShowDesignationDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fixed fetchVisitors function
   const fetchVisitors = useCallback(async () => {
     try {
       setListLoading(true);
       const token = localStorage.getItem("token");
 
-      // Build query params
       const params = {
         page: currentPage,
         limit: itemsPerPage,
       };
 
-      // Check if we have comma-separated search terms
+      // Always send individual filters
+      if (phoneFilter) params.phone = phoneFilter;
+      if (nameFilter) params.name = nameFilter;
+      if (officerNameFilter) params.officerName = officerNameFilter;
+      if (officerDepartmentFilter)
+        params.officerDepartment = officerDepartmentFilter;
+      if (officerDesignationFilter)
+        params.officerDesignation = officerDesignationFilter;
+      if (purposeFilter !== "all") params.purpose = purposeFilter;
+      if (statusFilter !== "all") params.status = statusFilter;
+
       if (debouncedSearchTerm) {
         if (debouncedSearchTerm.includes(",")) {
           params.multiSearch = debouncedSearchTerm;
@@ -136,31 +190,13 @@ const AddVisitor = () => {
         }
       }
 
-      // Only use individual filters if we don't have comma-separated search
-      if (!debouncedSearchTerm.includes(",")) {
-        if (phoneFilter) params.phone = phoneFilter;
-        if (nameFilter) params.name = nameFilter;
-        if (officerNameFilter) params.officerName = officerNameFilter;
-        if (officerDepartmentFilter)
-          params.officerDepartment = officerDepartmentFilter;
-        if (officerDesignationFilter)
-          params.officerDesignation = officerDesignationFilter;
-        if (purposeFilter && purposeFilter !== "all")
-          params.purpose = purposeFilter;
-      }
+      if (startTime) params.startTime = formatDateTimeForAPI(startTime);
+      if (endTime) params.endTime = formatDateTimeForAPI(endTime);
 
-      if (startTime) params.startTime = startTime;
-      if (endTime) params.endTime = endTime;
-
-      const response = await axios.get(
-        "https://api.appoinment.arbeitonline.top/api/visitors/all",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params,
-        }
-      );
+      const response = await axios.get(`${BASE_URL}/visitors/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
 
       setVisitors(response.data.visitors || []);
       setTotalVisitors(response.data.total || 0);
@@ -185,6 +221,7 @@ const AddVisitor = () => {
     officerDepartmentFilter,
     officerDesignationFilter,
     purposeFilter,
+    statusFilter,
     startTime,
     endTime,
   ]);
@@ -224,38 +261,23 @@ const AddVisitor = () => {
     fetchVisitors();
   }, [fetchVisitors]);
 
-  // Search officers
+  // Search officers - UPDATED to use officerSelectionSearch
   useEffect(() => {
-    const searchOfficers = async () => {
-      if (officerSearch.length < 2) {
-        setOfficerResults([]);
-        return;
-      }
-
-      try {
-        const token = localStorage.getItem("token");
-        const response = await axios.get(
-          "https://api.appoinment.arbeitonline.top/api/officers/search",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            params: { query: officerSearch },
-          }
-        );
-
-        setOfficerResults(response.data.officers || []);
-      } catch (error) {
-        console.error("Error searching officers:", error);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      searchOfficers();
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [officerSearch]);
+    if (selectedDesignation && officerSelectionSearch) {
+      const filtered = officersByDesignation.filter(
+        (officer) =>
+          officer.name
+            .toLowerCase()
+            .includes(officerSelectionSearch.toLowerCase()) ||
+          officer.department
+            .toLowerCase()
+            .includes(officerSelectionSearch.toLowerCase())
+      );
+      setFilteredOfficers(filtered);
+    } else {
+      setFilteredOfficers(officersByDesignation);
+    }
+  }, [officerSelectionSearch, officersByDesignation, selectedDesignation]);
 
   // Normalize phone number
   const normalizePhoneNumber = (phone) => {
@@ -287,7 +309,7 @@ const AddVisitor = () => {
         try {
           const token = localStorage.getItem("token");
           const response = await axios.get(
-            `https://api.appoinment.arbeitonline.top/api/visitors/check-phone/${normalizedPhone}`,
+            `${BASE_URL}/visitors/check-phone/${normalizedPhone}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -349,10 +371,60 @@ const AddVisitor = () => {
   // Select officer from search results
   const selectOfficer = (officer) => {
     setSelectedOfficer(officer);
-    setOfficerSearch(`${officer.name} - ${officer.designation}`);
+    setOfficerSelectionSearch(`${officer.name} - ${officer.designation}`); // CHANGED
     setShowOfficerDropdown(false);
     setOfficerResults([]);
   };
+
+  // Fetch all unique designations
+  const fetchUniqueDesignations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${BASE_URL}/officers/designations`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setUniqueDesignations(response.data.designations || []);
+      setFilteredDesignations(response.data.designations || []);
+    } catch (error) {
+      console.error("Error fetching designations:", error);
+    }
+  }, []);
+
+  // Fetch officers by designation
+  const fetchOfficersByDesignation = useCallback(async (designation) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${BASE_URL}/officers/by-designation`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: { designation },
+      });
+      setOfficersByDesignation(response.data.officers || []);
+      setFilteredOfficers(response.data.officers || []);
+    } catch (error) {
+      console.error("Error fetching officers by designation:", error);
+    }
+  }, []);
+
+  // Filter designations based on search
+  useEffect(() => {
+    if (designationFilter) {
+      const filtered = uniqueDesignations.filter((designation) =>
+        designation.toLowerCase().includes(designationFilter.toLowerCase())
+      );
+      setFilteredDesignations(filtered);
+    } else {
+      setFilteredDesignations(uniqueDesignations);
+    }
+  }, [designationFilter, uniqueDesignations]);
+
+  // Add this useEffect to fetch designations on component mount
+  useEffect(() => {
+    fetchUniqueDesignations();
+  }, [fetchUniqueDesignations]);
 
   // Select phone suggestion
   const selectPhoneSuggestion = async (visitor) => {
@@ -387,7 +459,7 @@ const AddVisitor = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "https://api.appoinment.arbeitonline.top/api/visitors/add",
+        `${BASE_URL}/visitors/add`,
         {
           ...data,
           phone: normalizedPhone,
@@ -408,9 +480,11 @@ const AddVisitor = () => {
       reset();
       setPhoto("");
       setSelectedOfficer(null);
-      setOfficerSearch("");
+      setOfficerSelectionSearch(""); // CHANGED
       setPhoneSuggestions([]);
       setShowPhoneSuggestions(false);
+      setSelectedDesignation("");
+      setDesignationSearch("");
 
       // Refresh visitor list
       fetchVisitors();
@@ -504,6 +578,7 @@ const AddVisitor = () => {
     setStartTime("");
     setEndTime("");
     setPurposeFilter("all");
+    setStatusFilter("all");
     setCurrentPage(1);
   };
 
@@ -828,7 +903,6 @@ const AddVisitor = () => {
                     </motion.div>
                   )}
               </div>
-
               {/* Name */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -860,7 +934,6 @@ const AddVisitor = () => {
                   </p>
                 )}
               </div>
-
               {/* Address */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -888,99 +961,176 @@ const AddVisitor = () => {
                   </p>
                 )}
               </div>
+              {/* Officer Search with Designation and Name Dropdowns */}
+              <div className="space-y-4">
+                {/* Designation Filter */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    <span className="flex items-center">
+                      <FiBriefcase className="w-4 h-4 mr-2 text-gray-600" />
+                      Filter by Designation *
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={designationSearch}
+                      onChange={(e) => {
+                        setDesignationSearch(e.target.value);
+                        setShowDesignationDropdown(true);
+                      }}
+                      onFocus={() => setShowDesignationDropdown(true)}
+                      className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
+                      placeholder="Search designation..."
+                    />
 
-              {/* Officer Search */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  <span className="flex items-center">
-                    <FiBriefcase className="w-4 h-4 mr-2 text-gray-600" />
-                    Officer Reference *
-                  </span>
-                </label>
-                <input
-                  type="text"
-                  value={officerSearch}
-                  onChange={(e) => {
-                    setOfficerSearch(e.target.value);
-                    setShowOfficerDropdown(true);
-                  }}
-                  onFocus={() => setShowOfficerDropdown(true)}
-                  onBlur={() =>
-                    setTimeout(() => setShowOfficerDropdown(false), 200)
-                  }
-                  className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
-                  placeholder="Search officer..."
-                />
+                    {/* Designation Dropdown */}
+                    <AnimatePresence>
+                      {showDesignationDropdown &&
+                        uniqueDesignations.length > 0 && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute z-30 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-50 overflow-y-auto"
+                          >
+                            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-2">
+                              <div className="relative">
+                                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                <input
+                                  type="text"
+                                  value={designationFilter}
+                                  onChange={(e) =>
+                                    setDesignationFilter(e.target.value)
+                                  }
+                                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                  placeholder="Filter designations..."
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            </div>
 
-                {selectedOfficer && (
-                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-green-900">
-                          {selectedOfficer.name}
-                        </div>
-                        <div className="text-sm text-green-700">
-                          {selectedOfficer.designation} •{" "}
-                          {selectedOfficer.department}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedOfficer(null);
-                          setOfficerSearch("");
+                            {filteredDesignations.map((designation) => (
+                              <button
+                                key={designation}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDesignation(designation);
+                                  setDesignationSearch(designation);
+                                  setShowDesignationDropdown(false);
+                                  setDesignationFilter("");
+                                  fetchOfficersByDesignation(designation);
+                                }}
+                                className="w-full text-left px-4 py-3 hover:bg-green-50 border-b border-gray-100 last:border-b-0 transition-colors group"
+                              >
+                                <div className="font-medium text-gray-900 group-hover:text-green-700">
+                                  {designation}
+                                </div>
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                {/* Officer Selection - Only show if designation is selected */}
+                {selectedDesignation && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      <span className="flex items-center">
+                        <FiUser className="w-4 h-4 mr-2 text-gray-600" />
+                        Select Officer *
+                      </span>
+                    </label>
+                    <div
+                      ref={selectedDesignation ? officerInputRef : null}
+                      className="relative"
+                    >
+                      <input
+                        type="text"
+                        value={officerSelectionSearch} // CHANGED
+                        onChange={(e) => {
+                          setOfficerSelectionSearch(e.target.value); // CHANGED
+                          setShowOfficerDropdown(true);
                         }}
-                        className="p-1 text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors"
-                      >
-                        <FiX className="h-5 w-5" />
-                      </button>
+                        onFocus={() => setShowOfficerDropdown(true)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
+                        placeholder={`Search officers in ${selectedDesignation}...`}
+                        disabled={!selectedDesignation}
+                      />
+
+                      {/* Selected Officer Display */}
+                      {selectedOfficer && (
+                        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-green-900">
+                                {selectedOfficer.name}
+                              </div>
+                              <div className="text-sm text-green-700">
+                                {selectedOfficer.designation} -{" "}
+                                {selectedOfficer.department}
+                              </div>
+                              {selectedOfficer.bpNumber && (
+                                <div className="text-xs text-green-600 mt-1">
+                                  BP: {selectedOfficer.bpNumber}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedOfficer(null);
+                                setOfficerSelectionSearch(""); // CHANGED
+                              }}
+                              className="p-1 text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors"
+                            >
+                              <FiX className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Officer Dropdown */}
+                      <AnimatePresence>
+                        {showOfficerDropdown && filteredOfficers.length > 0 && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+                          >
+                            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                              <p className="text-xs font-medium text-blue-700">
+                                Found {filteredOfficers.length} officer(s)
+                              </p>
+                            </div>
+                            {filteredOfficers.map((officer) => (
+                              <button
+                                key={officer._id}
+                                type="button"
+                                onClick={() => selectOfficer(officer)}
+                                className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition-colors group"
+                              >
+                                <div className="font-medium text-gray-900 group-hover:text-blue-700">
+                                  {officer.name}
+                                </div>
+                                <div className="text-sm text-gray-500 group-hover:text-blue-600">
+                                  {officer.designation} - {officer.department}{" "}
+                                  {officer.bpNumber &&
+                                    `| BP: ${officer.bpNumber}`}
+                                </div>
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
                 )}
-
-                <AnimatePresence>
-                  {showOfficerDropdown && officerResults.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto"
-                    >
-                      <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
-                        <p className="text-xs font-medium text-blue-700">
-                          Found {officerResults.length} officer(s)
-                        </p>
-                      </div>
-                      {officerResults.map((officer) => (
-                        <button
-                          key={officer._id}
-                          type="button"
-                          onClick={() => selectOfficer(officer)}
-                          className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition-colors group"
-                        >
-                          <div className="font-medium text-gray-900 group-hover:text-blue-700">
-                            {officer.name}
-                          </div>
-                          <div className="text-sm text-gray-500 group-hover:text-blue-600">
-                            {officer.designation} • {officer.department}
-                          </div>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {showOfficerDropdown &&
-                  officerSearch.length >= 2 &&
-                  officerResults.length === 0 && (
-                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4">
-                      <p className="text-sm text-gray-500 text-center">
-                        No officers found matching "{officerSearch}"
-                      </p>
-                    </div>
-                  )}
               </div>
-
               {/* Purpose */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -1177,6 +1327,20 @@ const AddVisitor = () => {
                                 purpose.slice(1)}
                             </option>
                           ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Officer Status
+                        </label>
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active Only</option>
+                          <option value="inactive">Inactive Only</option>
                         </select>
                       </div>
                       <div className="md:col-span-3">
@@ -1402,6 +1566,18 @@ const AddVisitor = () => {
                                   searchTerms
                                 )}
                               </div>
+                              <div className={`py-1 text-xs `}>
+                                Status:{" "}
+                                <span
+                                  className={`text-xs ${
+                                    visitor.officer?.status === "active"
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {visitor.officer?.status}
+                                </span>
+                              </div>
                             </td>
                             <td className="px-4 py-3">
                               <div className="text-gray-900">
@@ -1524,6 +1700,20 @@ const AddVisitor = () => {
                                             visitor.officer?.department,
                                             searchTerms
                                           )}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center">
+                                        <span className="text-gray-600 mr-2">
+                                          Status:
+                                        </span>
+                                        <span
+                                          className={`ml-2 font-medium ${
+                                            visitor.officer?.status === "active"
+                                              ? "text-green-600"
+                                              : "text-red-600"
+                                          }`}
+                                        >
+                                          {visitor.officer?.status}
                                         </span>
                                       </div>
                                     </div>

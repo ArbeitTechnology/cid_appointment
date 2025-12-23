@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 
 const Settings = ({ user }) => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const {
     register: registerProfile,
     handleSubmit: handleSubmitProfile,
@@ -51,7 +52,7 @@ const Settings = ({ user }) => {
       };
 
       const response = await axios.put(
-        "https://api.appoinment.arbeitonline.top/api/auth/profile",
+        `${BASE_URL}/auth/profile`,
         updatedData,
         {
           headers: {
@@ -82,15 +83,11 @@ const Settings = ({ user }) => {
     const loadingToast = toast.loading("Changing password...");
 
     try {
-      await axios.put(
-        "https://api.appoinment.arbeitonline.top/api/auth/change-password",
-        data,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
+      await axios.put(`${BASE_URL}/auth/change-password`, data, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
 
       toast.dismiss(loadingToast);
       toast.success("Password changed successfully! Please login again.");

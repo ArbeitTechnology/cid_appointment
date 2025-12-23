@@ -188,15 +188,17 @@ exports.searchOfficers = async (req, res) => {
       });
     }
 
+    // Remove the status filter to show all officers
     const officers = await Officer.find({
       $or: [
         { name: { $regex: query, $options: "i" } },
         { designation: { $regex: query, $options: "i" } },
         { department: { $regex: query, $options: "i" } },
+        { bpNumber: { $regex: query, $options: "i" } },
       ],
-      status: "active",
+      // Removed: status: "active"
     })
-      .select("name designation department phone bpNumber")
+      .select("name designation department phone bpNumber status") // Added status
       .limit(10);
 
     res.json({
@@ -313,5 +315,45 @@ exports.deleteOfficer = async (req, res) => {
   } catch (error) {
     console.error("Error deleting officer:", error);
     res.status(500).json({ error: "Failed to delete officer" });
+  }
+};
+
+// Get all unique designations
+exports.getUniqueDesignations = async (req, res) => {
+  try {
+    const designations = await Officer.distinct("designation", {
+      status: "active",
+    });
+    res.json({
+      success: true,
+      designations: designations.sort(),
+    });
+  } catch (error) {
+    console.error("Error fetching designations:", error);
+    res.status(500).json({ error: "Failed to fetch designations" });
+  }
+};
+
+// Get officers by designation
+exports.getOfficersByDesignation = async (req, res) => {
+  try {
+    const { designation } = req.query;
+
+    if (!designation) {
+      return res.status(400).json({ error: "Designation is required" });
+    }
+
+    const officers = await Officer.find({
+      designation: designation,
+      status: "active",
+    }).select("name designation department phone");
+
+    res.json({
+      success: true,
+      officers,
+    });
+  } catch (error) {
+    console.error("Error fetching officers by designation:", error);
+    res.status(500).json({ error: "Failed to fetch officers" });
   }
 };

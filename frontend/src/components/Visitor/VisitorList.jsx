@@ -22,6 +22,7 @@ import {
 import { format, parseISO } from "date-fns";
 
 const VisitorList = () => {
+  const BASE_URL = import.meta.env.VITE_API_URL;
   const [visitors, setVisitors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,7 +37,7 @@ const VisitorList = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-
+  const [statusFilter, setStatusFilter] = useState("all");
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -73,10 +74,25 @@ const VisitorList = () => {
     officerDepartmentFilter,
     officerDesignationFilter,
     purposeFilter,
+    statusFilter,
     startTime,
     endTime,
   ]);
+  // Add this function to format date for API
+  const formatDateTimeForAPI = (dateTimeString) => {
+    if (!dateTimeString) return "";
+    // Convert to ISO string without timezone offset
+    const date = new Date(dateTimeString);
+    // Get local time in ISO format
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
 
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  };
   // Fetch visitors with debounced search
   const fetchVisitors = useCallback(async () => {
     try {
@@ -111,20 +127,19 @@ const VisitorList = () => {
           params.officerDesignation = officerDesignationFilter;
         if (purposeFilter && purposeFilter !== "all")
           params.purpose = purposeFilter;
+        if (statusFilter !== "all") params.status = statusFilter;
       }
 
-      if (startTime) params.startTime = startTime;
-      if (endTime) params.endTime = endTime;
+      // In fetchVisitors function, update the params:
+      if (startTime) params.startTime = formatDateTimeForAPI(startTime);
+      if (endTime) params.endTime = formatDateTimeForAPI(endTime);
 
-      const response = await axios.get(
-        "https://api.appoinment.arbeitonline.top/api/visitors/all",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params,
-        }
-      );
+      const response = await axios.get(`${BASE_URL}/visitors/all`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params,
+      });
 
       setVisitors(response.data.visitors || []);
       setTotalVisitors(response.data.total || 0);
@@ -150,13 +165,14 @@ const VisitorList = () => {
     officerDepartmentFilter,
     officerDesignationFilter,
     purposeFilter,
+    statusFilter,
     startTime,
     endTime,
   ]);
 
   useEffect(() => {
     fetchVisitors();
-  }, [fetchVisitors]);
+  }, [fetchVisitors, statusFilter]);
 
   // Highlight matched text
   const highlightMatchedText = (text, searchTerms) => {
@@ -237,6 +253,7 @@ const VisitorList = () => {
     setStartTime("");
     setEndTime("");
     setPurposeFilter("all");
+    setStatusFilter("all");
     setCurrentPage(1);
   };
 
@@ -542,7 +559,20 @@ const VisitorList = () => {
                   ))}
                 </select>
               </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Officer Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active Only</option>
+                  <option value="inactive">Inactive Only</option>
+                </select>
+              </div>
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Time Range Filter
@@ -790,6 +820,18 @@ const VisitorList = () => {
                             visitor.officer?.department,
                             searchTerms
                           )}
+                        </div>
+                        <div className={`py-1 text-xs `}>
+                          Status:{" "}
+                          <span
+                            className={`text-xs ${
+                              visitor.officer?.status === "active"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {visitor.officer?.status}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4">

@@ -9,7 +9,7 @@ const Footer = ({ activeTab }) => {
   const handleArbeitClick = () => {
     window.open("https://arbeittechnology.com", "_blank");
   };
-
+const BASE_URL = import.meta.env.VITE_API_URL;
   return (
     <motion.footer
       initial={{ opacity: 0 }}
