@@ -316,17 +316,22 @@ const AdminPanel = () => {
 
         {/* Current User Info Card */}
         <div className="mb-6 p-4 bg-linear-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            {/* Left section */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-linear-to-r from-purple-600 to-blue-600 flex items-center justify-center">
+              <div className="w-16 h-10 md:w-10 rounded-full bg-linear-to-r from-purple-600 to-blue-600 flex items-center justify-center">
                 <span className="font-bold text-white">
                   {user.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="font-medium text-gray-900">{user.name}</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-500">{user.email}</p>
+                <p className="font-medium text-gray-900 break-all">
+                  {user.name}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-gray-500 break-all">
+                    {user.email}
+                  </p>
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                       user.userType === "super_admin"
@@ -340,7 +345,9 @@ const AdminPanel = () => {
                 </div>
               </div>
             </div>
-            <div className="text-right">
+
+            {/* Right section */}
+            <div className="text-left sm:text-right">
               <p className="text-sm text-gray-600">You are viewing</p>
               <p className="font-medium">
                 {displayUsers.length} other user

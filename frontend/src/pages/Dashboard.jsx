@@ -133,16 +133,33 @@ const Dashboard = () => {
       {/* Mobile Header */}
       {isMobile && <MobileHeader toggleSidebar={toggleSidebar} />}
 
-      {/* Mobile Overlay */}
+      {/* Mobile Overlay and Sidebar should be at same level */}
       <AnimatePresence>
         {isMobile && isMobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/30 z-40 md:hidden"
-            onClick={() => setIsMobileOpen(false)}
-          />
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/30 z-40 md:hidden"
+              onClick={() => setIsMobileOpen(false)}
+            />
+
+            {/* Mobile Sidebar - moved outside the main container */}
+            <Sidebar
+              isMobile={isMobile}
+              isMobileOpen={isMobileOpen}
+              sidebarOpen={sidebarOpen}
+              activeTab={activeTab}
+              user={user}
+              handleTabChange={handleTabChange}
+              toggleSidebar={toggleSidebar}
+              setIsMobileOpen={setIsMobileOpen}
+              handleLogout={handleLogout}
+              isHovered={isHovered}
+              setIsHovered={setIsHovered}
+            />
+          </>
         )}
       </AnimatePresence>
 
@@ -152,22 +169,24 @@ const Dashboard = () => {
           isMobile ? "mt-16 mb-2 h-[calc(100vh-5rem)]" : "h-[95vh]"
         }`}
       >
-        {/* Sidebar */}
-        <div className="relative z-10">
-          <Sidebar
-            isMobile={isMobile}
-            isMobileOpen={isMobileOpen}
-            sidebarOpen={sidebarOpen}
-            activeTab={activeTab}
-            user={user}
-            handleTabChange={handleTabChange}
-            toggleSidebar={toggleSidebar}
-            setIsMobileOpen={setIsMobileOpen}
-            handleLogout={handleLogout}
-            isHovered={isHovered}
-            setIsHovered={setIsHovered}
-          />
-        </div>
+        {/* Desktop Sidebar - only show when not mobile */}
+        {!isMobile && (
+          <div className="relative z-10">
+            <Sidebar
+              isMobile={isMobile}
+              isMobileOpen={isMobileOpen}
+              sidebarOpen={sidebarOpen}
+              activeTab={activeTab}
+              user={user}
+              handleTabChange={handleTabChange}
+              toggleSidebar={toggleSidebar}
+              setIsMobileOpen={setIsMobileOpen}
+              handleLogout={handleLogout}
+              isHovered={isHovered}
+              setIsHovered={setIsHovered}
+            />
+          </div>
+        )}
 
         {/* Main Content Area */}
         <div className="flex-1 h-full overflow-auto relative bg-gray-50 flex flex-col z-10">
