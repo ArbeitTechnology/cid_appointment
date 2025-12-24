@@ -20,6 +20,12 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiLayers,
+  FiActivity,
+  FiChevronUp,
+  FiUserCheck,
+  FiEdit,
+  FiTrash2,
+  FiPrinter,
 } from "react-icons/fi";
 import { format, parseISO } from "date-fns";
 import jsPDF from "jspdf";
@@ -1045,29 +1051,29 @@ const VisitorList = () => {
         </div>
       </div>
       {/* Visitors Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-300 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="flex justify-center items-center py-12">
+          <div className="flex justify-center items-center py-16">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
           </div>
         ) : visitors.length === 0 ? (
-          <div className="text-center py-12">
-            <FiSearch className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">
+          <div className="text-center py-16">
+            <FiSearch className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
               No visitors found
             </h3>
-            <p className="text-gray-600 mt-1">
+            <p className="text-gray-600 max-w-md mx-auto">
               {searchTerm ||
               phoneFilter ||
               nameFilter ||
               officerNameFilter ||
               officerDesignationFilter ||
               officerDepartmentFilter ||
-              officerUnitFilter || // ADD this
+              officerUnitFilter ||
               startTime ||
               endTime ||
               purposeFilter !== "all"
-                ? "Try changing your filters or search term"
+                ? "Try adjusting your filters or search terms"
                 : "No visitors have been registered yet"}
             </p>
           </div>
@@ -1075,53 +1081,53 @@ const VisitorList = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-300">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Visitor
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider min-w-[380px]">
+                    Visitor Details
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Contact
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider min-w-[280px]">
+                    Officer Details
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Officer
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Visit Time
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Actions
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider min-w-[280px]">
+                    Visit Information
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {visitors.map((visitor) => (
                   <React.Fragment key={visitor._id}>
                     <motion.tr
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => toggleRowExpansion(visitor._id)}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="hover:bg-gray-50 transition-colors duration-150 cursor-pointer group"
                     >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 shrink-0">
+                      {/* Visitor Details Column */}
+                      <td className="px-8 py-6 align-top">
+                        <div className="flex gap-6 items-start">
+                          {/* Visitor Image (UNCHANGED SIZE) */}
+                          <div className="flex-shrink-0">
                             {visitor.photo ? (
-                              <img
-                                src={visitor.photo}
-                                alt={visitor.name}
-                                className="h-10 w-10 rounded-full object-cover border-2 border-gray-300"
-                              />
+                              <div className="relative w-full max-w-sm">
+                                <img
+                                  src={visitor.photo}
+                                  alt={visitor.name}
+                                  className="w-full h-80 object-cover rounded-lg overflow-hidden"
+                                />
+                              </div>
                             ) : (
-                              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                                <span className="text-green-600 font-bold">
+                              <div className="w-full h-80 rounded-lg bg-gradient-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
+                                <span className="text-3xl font-bold text-gray-600">
                                   {visitor.name.charAt(0).toUpperCase()}
                                 </span>
                               </div>
                             )}
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {/* Special highlighting for visitor name filter */}
+
+                          {/* Visitor Information */}
+                          <div className="flex-1 min-w-0 flex flex-col pt-1">
+                            {/* Name */}
+                            <h4 className="text-base font-semibold text-gray-900 leading-tight mb-4">
                               {nameFilter ? (
                                 <span
                                   dangerouslySetInnerHTML={{
@@ -1130,233 +1136,25 @@ const VisitorList = () => {
                                         ?.toString()
                                         ?.replace(
                                           new RegExp(`(${nameFilter})`, "gi"),
-                                          '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+                                          '<mark class="bg-yellow-100 px-1 rounded">$1</mark>'
                                         ) || "",
                                   }}
                                 />
                               ) : (
                                 highlightMatchedText(visitor.name, searchTerms)
                               )}
-                            </div>
-                            <div className="text-sm text-gray-500 capitalize">
-                              {/* Special highlighting for purpose filter */}
-                              {purposeFilter !== "all" ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.purpose
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(
-                                            `(${purposeFilter})`,
-                                            "gi"
-                                          ),
-                                          '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
-                                        ) || "",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(
-                                  visitor.purpose,
-                                  searchTerms
-                                )
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          {/* Special highlighting for phone filter */}
-                          {phoneFilter ? (
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  visitor.phone
-                                    ?.toString()
-                                    ?.replace(
-                                      new RegExp(`(${phoneFilter})`, "gi"),
-                                      '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                    ) || "",
-                              }}
-                            />
-                          ) : (
-                            highlightMatchedText(visitor.phone, searchTerms)
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate max-w-xs">
-                          {highlightMatchedText(visitor.address, searchTerms)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          {/* Special highlighting for officer name filter */}
-                          {officerNameFilter ? (
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  visitor.officer?.name
-                                    ?.toString()
-                                    ?.replace(
-                                      new RegExp(
-                                        `(${officerNameFilter})`,
-                                        "gi"
-                                      ),
-                                      '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                    ) || "N/A",
-                              }}
-                            />
-                          ) : (
-                            highlightMatchedText(
-                              visitor.officer?.name,
-                              searchTerms
-                            )
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {/* Special highlighting for officer designation filter */}
-                          {officerDesignationFilter ? (
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  visitor.officer?.designation
-                                    ?.toString()
-                                    ?.replace(
-                                      new RegExp(
-                                        `(${officerDesignationFilter})`,
-                                        "gi"
-                                      ),
-                                      '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                    ) || "N/A",
-                              }}
-                            />
-                          ) : (
-                            highlightMatchedText(
-                              visitor.officer?.designation,
-                              searchTerms
-                            )
-                          )}{" "}
-                          -{" "}
-                          {/* Special highlighting for officer department filter */}
-                          {officerDepartmentFilter ? (
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  visitor.officer?.department
-                                    ?.toString()
-                                    ?.replace(
-                                      new RegExp(
-                                        `(${officerDepartmentFilter})`,
-                                        "gi"
-                                      ),
-                                      '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                    ) || "N/A",
-                              }}
-                            />
-                          ) : (
-                            highlightMatchedText(
-                              visitor.officer?.department,
-                              searchTerms
-                            )
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Unit:{" "}
-                          {/* Special highlighting for unit filter only */}
-                          {officerUnitFilter ? (
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  visitor.officer?.unit
-                                    ?.toString()
-                                    ?.replace(
-                                      new RegExp(
-                                        `(${officerUnitFilter})`,
-                                        "gi"
-                                      ),
-                                      '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                    ) || "N/A",
-                              }}
-                            />
-                          ) : (
-                            visitor.officer?.unit || "N/A"
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          {format(parseISO(visitor.visitTime), "MMM dd, yyyy")}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {format(parseISO(visitor.visitTime), "hh:mm:ss a")}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleRowExpansion(visitor._id);
-                          }}
-                          className="px-3 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                        >
-                          {expandedRows[visitor._id]
-                            ? "Hide Details"
-                            : "View Details"}
-                        </button>
-                      </td>
-                    </motion.tr>
+                            </h4>
 
-                    {/* Expanded Row Details */}
-                    {expandedRows[visitor._id] && (
-                      <motion.tr
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="bg-gray-50"
-                      >
-                        <td colSpan="6" className="px-6 py-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                                Visitor Details
-                              </h4>
-                              <div className="space-y-2">
-                                <div className="flex items-center">
-                                  <FiUser className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Name:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium">
-                                    {/* Special highlighting for visitor name filter in expanded view */}
-                                    {nameFilter ? (
-                                      <span
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            visitor.name
-                                              ?.toString()
-                                              ?.replace(
-                                                new RegExp(
-                                                  `(${nameFilter})`,
-                                                  "gi"
-                                                ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                              ) || "",
-                                        }}
-                                      />
-                                    ) : (
-                                      highlightMatchedText(
-                                        visitor.name,
-                                        searchTerms
-                                      )
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="flex items-center">
-                                  <FiPhone className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Phone:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium">
-                                    {/* Special highlighting for phone filter in expanded view */}
+                            {/* Info Blocks */}
+                            <div className="space-y-4">
+                              {/* Contact */}
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                  Contact
+                                </p>
+                                <div className="flex items-center gap-2 text-sm text-gray-900">
+                                  <FiPhone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                  <span className="truncate">
                                     {phoneFilter ? (
                                       <span
                                         dangerouslySetInnerHTML={{
@@ -1368,7 +1166,7 @@ const VisitorList = () => {
                                                   `(${phoneFilter})`,
                                                   "gi"
                                                 ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                '<mark class="bg-yellow-100 px-1 rounded">$1</mark>'
                                               ) || "",
                                         }}
                                       />
@@ -1380,257 +1178,253 @@ const VisitorList = () => {
                                     )}
                                   </span>
                                 </div>
-                                <div className="flex items-center">
-                                  <FiMapPin className="h-4 w-4 text-gray-400 mr-2 shrink-0" />
-                                  <span className="text-sm text-gray-600">
-                                    Address:
-                                  </span>
-                                  <span className="ml-1 text-sm font-medium">
+                              </div>
+
+                              {/* Address */}
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                  Address
+                                </p>
+                                <div className="flex items-start gap-2 text-sm text-gray-600 max-w-xs">
+                                  <FiMapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                                  <span className="truncate">
                                     {highlightMatchedText(
                                       visitor.address,
                                       searchTerms
                                     )}
                                   </span>
                                 </div>
-                                <div className="flex items-center">
-                                  <FiBriefcase className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Purpose:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium capitalize">
-                                    {/* Special highlighting for purpose filter in expanded view */}
-                                    {purposeFilter !== "all" ? (
-                                      <span
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            visitor.purpose
-                                              ?.toString()
-                                              ?.replace(
-                                                new RegExp(
-                                                  `(${purposeFilter})`,
-                                                  "gi"
-                                                ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                              ) || "",
-                                        }}
-                                      />
-                                    ) : (
-                                      highlightMatchedText(
-                                        visitor.purpose,
-                                        searchTerms
-                                      )
-                                    )}
-                                  </span>
-                                </div>
                               </div>
+
+                              {/* Purpose */}
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                  Purpose
+                                </p>
+                                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 capitalize">
+                                  {purposeFilter !== "all" ? (
+                                    <span
+                                      dangerouslySetInnerHTML={{
+                                        __html:
+                                          visitor.purpose
+                                            ?.toString()
+                                            ?.replace(
+                                              new RegExp(
+                                                `(${purposeFilter})`,
+                                                "gi"
+                                              ),
+                                              '<mark class="bg-yellow-100 px-1 rounded">$1</mark>'
+                                            ) || "",
+                                      }}
+                                    />
+                                  ) : (
+                                    highlightMatchedText(
+                                      visitor.purpose,
+                                      searchTerms
+                                    )
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Officer Details Column */}
+                      <td className="px-8 py-6 align-top">
+                        <div className="space-y-5">
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                              Officer
+                            </p>
+                            <h5 className="text-lg font-semibold text-gray-900 mb-1">
+                              {officerNameFilter ? (
+                                <span
+                                  dangerouslySetInnerHTML={{
+                                    __html:
+                                      visitor.officer?.name
+                                        ?.toString()
+                                        ?.replace(
+                                          new RegExp(
+                                            `(${officerNameFilter})`,
+                                            "gi"
+                                          ),
+                                          '<mark class="bg-yellow-100 text-gray-900 px-1 rounded">$1</mark>'
+                                        ) || "N/A",
+                                  }}
+                                />
+                              ) : (
+                                highlightMatchedText(
+                                  visitor.officer?.name,
+                                  searchTerms
+                                )
+                              )}
+                            </h5>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Designation
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {officerDesignationFilter ? (
+                                  <span
+                                    dangerouslySetInnerHTML={{
+                                      __html:
+                                        visitor.officer?.designation
+                                          ?.toString()
+                                          ?.replace(
+                                            new RegExp(
+                                              `(${officerDesignationFilter})`,
+                                              "gi"
+                                            ),
+                                            '<mark class="bg-yellow-100 text-gray-900 px-1 rounded">$1</mark>'
+                                          ) || "N/A",
+                                    }}
+                                  />
+                                ) : (
+                                  highlightMatchedText(
+                                    visitor.officer?.designation,
+                                    searchTerms
+                                  )
+                                )}
+                              </p>
                             </div>
 
                             <div>
-                              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                                Officer Details
-                              </h4>
-                              <div className="space-y-2">
-                                <div className="flex items-center">
-                                  <FiUser className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Officer:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium">
-                                    {/* Special highlighting for officer name filter in expanded view */}
-                                    {officerNameFilter ? (
-                                      <span
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            visitor.officer?.name
-                                              ?.toString()
-                                              ?.replace(
-                                                new RegExp(
-                                                  `(${officerNameFilter})`,
-                                                  "gi"
-                                                ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                              ) || "N/A",
-                                        }}
-                                      />
-                                    ) : (
-                                      highlightMatchedText(
-                                        visitor.officer?.name,
-                                        searchTerms
-                                      )
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="flex items-center">
-                                  <FiBriefcase className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Designation:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium">
-                                    {/* Special highlighting for officer designation filter in expanded view */}
-                                    {officerDesignationFilter ? (
-                                      <span
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            visitor.officer?.designation
-                                              ?.toString()
-                                              ?.replace(
-                                                new RegExp(
-                                                  `(${officerDesignationFilter})`,
-                                                  "gi"
-                                                ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                              ) || "N/A",
-                                        }}
-                                      />
-                                    ) : (
-                                      highlightMatchedText(
-                                        visitor.officer?.designation,
-                                        searchTerms
-                                      )
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="flex items-center">
-                                  <FiBriefcase className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Department:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium">
-                                    {/* Special highlighting for officer department filter in expanded view */}
-                                    {officerDepartmentFilter ? (
-                                      <span
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            visitor.officer?.department
-                                              ?.toString()
-                                              ?.replace(
-                                                new RegExp(
-                                                  `(${officerDepartmentFilter})`,
-                                                  "gi"
-                                                ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                              ) || "N/A",
-                                        }}
-                                      />
-                                    ) : (
-                                      highlightMatchedText(
-                                        visitor.officer?.department,
-                                        searchTerms
-                                      )
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="flex items-center">
-                                  <FiLayers className="h-4 w-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-600">
-                                    Unit:{" "}
-                                  </span>
-                                  <span className="ml-2 text-sm font-medium">
-                                    {/* Special highlighting for unit filter in expanded view */}
-                                    {officerUnitFilter ? (
-                                      <span
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            visitor.officer?.unit
-                                              ?.toString()
-                                              ?.replace(
-                                                new RegExp(
-                                                  `(${officerUnitFilter})`,
-                                                  "gi"
-                                                ),
-                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
-                                              ) || "N/A",
-                                        }}
-                                      />
-                                    ) : (
-                                      visitor.officer?.unit || "N/A"
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="flex items-center">
-                                  <span className="text-sm text-gray-600 mr-1">
-                                    Status:
-                                  </span>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Department
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {officerDepartmentFilter ? (
                                   <span
-                                    className={`text-sm font-medium ${
-                                      visitor.officer?.status === "active"
-                                        ? "text-green-600"
-                                        : "text-red-600"
-                                    }`}
-                                  >
-                                    {visitor.officer?.status}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="md:col-span-2">
-                              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                                Visit Information
-                              </h4>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                                  <p className="text-xs text-gray-500">
-                                    Visit Time
-                                  </p>
-                                  <p className="text-sm font-medium">
-                                    {format(
-                                      parseISO(visitor.visitTime),
-                                      "MMM dd, yyyy hh:mm a"
-                                    )}
-                                  </p>
-                                </div>
-                                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                                  <p className="text-xs text-gray-500">
-                                    Registered On
-                                  </p>
-                                  <p className="text-sm font-medium">
-                                    {format(
-                                      parseISO(visitor.createdAt),
-                                      "MMM dd, yyyy"
-                                    )}
-                                  </p>
-                                </div>
-                                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                                  <p className="text-xs text-gray-500">
-                                    Last Updated
-                                  </p>
-                                  <p className="text-sm font-medium">
-                                    {format(
-                                      parseISO(visitor.updatedAt),
-                                      "MMM dd, yyyy"
-                                    )}
-                                  </p>
-                                </div>
-                                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                                  <p className="text-xs text-gray-500">
-                                    Visitor ID
-                                  </p>
-                                  <p className="text-sm font-mono text-gray-700 truncate">
-                                    {visitor._id}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {visitor.photo && (
-                              <div className="md:col-span-2">
-                                <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                                  Visitor Photo
-                                </h4>
-                                <div className="flex justify-center">
-                                  <img
-                                    src={visitor.photo}
-                                    alt={visitor.name}
-                                    className="h-full w-64 object-contain"
+                                    dangerouslySetInnerHTML={{
+                                      __html:
+                                        visitor.officer?.department
+                                          ?.toString()
+                                          ?.replace(
+                                            new RegExp(
+                                              `(${officerDepartmentFilter})`,
+                                              "gi"
+                                            ),
+                                            '<mark class="bg-yellow-100 text-gray-900 px-1 rounded">$1</mark>'
+                                          ) || "N/A",
+                                    }}
                                   />
-                                </div>
-                              </div>
-                            )}
+                                ) : (
+                                  highlightMatchedText(
+                                    visitor.officer?.department,
+                                    searchTerms
+                                  )
+                                )}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Unit
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {officerUnitFilter ? (
+                                  <span
+                                    dangerouslySetInnerHTML={{
+                                      __html:
+                                        visitor.officer?.unit
+                                          ?.toString()
+                                          ?.replace(
+                                            new RegExp(
+                                              `(${officerUnitFilter})`,
+                                              "gi"
+                                            ),
+                                            '<mark class="bg-yellow-100 text-gray-900 px-1 rounded">$1</mark>'
+                                          ) || "N/A",
+                                    }}
+                                  />
+                                ) : (
+                                  visitor.officer?.unit || "N/A"
+                                )}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Status
+                              </p>
+                              <span
+                                className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
+                                  visitor.officer?.status === "active"
+                                    ? "bg-green-100 text-green-800 border border-green-200"
+                                    : "bg-red-100 text-red-800 border border-red-200"
+                                }`}
+                              >
+                                <FiActivity className="w-3 h-3 mr-1.5" />
+                                {visitor.officer?.status}
+                              </span>
+                            </div>
                           </div>
-                        </td>
-                      </motion.tr>
-                    )}
+                        </div>
+                      </td>
+
+                      {/* Visit Information Column */}
+                      <td className="px-8 py-6 align-top">
+                        <div className="space-y-5">
+                          <div className="bg-gradient-to-br from-blue-50 to-white p-5 rounded-lg border border-blue-100">
+                            <div className="flex items-center mb-3">
+                              <FiCalendar className="w-4 h-4 text-blue-600 mr-2" />
+                              <p className="text-sm font-medium text-gray-700">
+                                Visit Date
+                              </p>
+                            </div>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {format(
+                                parseISO(visitor.visitTime),
+                                "MMM dd, yyyy"
+                              )}
+                            </p>
+                            <div className="flex items-center text-sm text-gray-600 mt-2">
+                              <FiClock className="w-3.5 h-3.5 text-gray-400 mr-1.5" />
+                              {format(
+                                parseISO(visitor.visitTime),
+                                "hh:mm:ss a"
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Registered On
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {format(
+                                  parseISO(visitor.createdAt),
+                                  "MMM dd, yyyy"
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {format(parseISO(visitor.createdAt), "hh:mm a")}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Last Updated
+                              </p>
+                              <p className="text-sm text-gray-900">
+                                {format(
+                                  parseISO(visitor.updatedAt),
+                                  "MMM dd, yyyy"
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {format(parseISO(visitor.updatedAt), "hh:mm a")}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </motion.tr>
                   </React.Fragment>
                 ))}
               </tbody>
