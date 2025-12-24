@@ -197,7 +197,7 @@ const OfficerVisitorList = ({ user }) => {
       if (startTime) params.startTime = startTime;
       if (endTime) params.endTime = endTime;
 
-      const response = await axios.get(`${BASE_URL}/visitors/all`, {
+      const response = await axios.get(`${BASE_URL}/visitors/my-visitors`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
       });
