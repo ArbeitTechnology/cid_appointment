@@ -28,60 +28,72 @@ import {
   FiCalendar,
   FiChevronLeft,
   FiChevronRight,
+  FiDownload,
+  FiTrendingUp,
+  FiLayers,
 } from "react-icons/fi";
 import Webcam from "react-webcam";
 import { format, parseISO } from "date-fns";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const AddVisitor = () => {
   const BASE_URL = import.meta.env.VITE_API_URL;
-  // Add Visitor States
+
+  // Form states
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [photo, setPhoto] = useState("");
-  const [officerSelectionSearch, setOfficerSelectionSearch] = useState(""); // CHANGED
-  const [officerResults, setOfficerResults] = useState([]);
-  const [selectedOfficer, setSelectedOfficer] = useState(null);
+
+  // Officer selection states (NEW: 3-level hierarchy)
+  const [designationSearch, setDesignationSearch] = useState("");
+  const [selectedDesignation, setSelectedDesignation] = useState("");
+  const [unitSearch, setUnitSearch] = useState("");
+  const [selectedUnit, setSelectedUnit] = useState("");
+  const [officerSearch, setOfficerSearch] = useState("");
+  const [uniqueDesignations, setUniqueDesignations] = useState([]);
+  const [uniqueUnits, setUniqueUnits] = useState([]);
+  const [officersByUnit, setOfficersByUnit] = useState([]);
+  const [filteredDesignations, setFilteredDesignations] = useState([]);
+  const [filteredUnits, setFilteredUnits] = useState([]);
+  const [filteredOfficers, setFilteredOfficers] = useState([]);
+  const [showDesignationDropdown, setShowDesignationDropdown] = useState(false);
+  const [showUnitDropdown, setShowUnitDropdown] = useState(false);
   const [showOfficerDropdown, setShowOfficerDropdown] = useState(false);
+  const [selectedOfficer, setSelectedOfficer] = useState(null);
+  const [officerUnitFilter, setOfficerUnitFilter] = useState("");
+
+  // Phone suggestions
   const [phoneSuggestions, setPhoneSuggestions] = useState([]);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
   const [phoneChecking, setPhoneChecking] = useState(false);
-  const [cameraError, setCameraError] = useState(false);
-  const webcamRef = useRef(null);
 
-  // Visitor List States
+  // Visitor list states
   const [visitors, setVisitors] = useState([]);
   const [listLoading, setListLoading] = useState(true);
+  const [totalVisitors, setTotalVisitors] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneFilter, setPhoneFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
   const [officerNameFilter, setOfficerNameFilter] = useState("");
   const [officerDepartmentFilter, setOfficerDepartmentFilter] = useState("");
   const [officerDesignationFilter, setOfficerDesignationFilter] = useState("");
+  const [purposeFilter, setPurposeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [purposeFilter, setPurposeFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
-  // Add these new states
-  const [designationSearch, setDesignationSearch] = useState("");
-  const [selectedDesignation, setSelectedDesignation] = useState("");
-  const [showDesignationDropdown, setShowDesignationDropdown] = useState(false);
-  const [designationFilter, setDesignationFilter] = useState("");
-  const [officersByDesignation, setOfficersByDesignation] = useState([]);
-  const [uniqueDesignations, setUniqueDesignations] = useState([]);
-  const [filteredDesignations, setFilteredDesignations] = useState([]);
-  const [filteredOfficers, setFilteredOfficers] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [totalVisitors, setTotalVisitors] = useState(0);
-
+  // Refs
+  const webcamRef = useRef(null);
   const officerInputRef = useRef(null);
   const designationInputRef = useRef(null);
+  const unitInputRef = useRef(null);
+  const [cameraError, setCameraError] = useState(false);
 
   const {
     register,
@@ -93,29 +105,29 @@ const AddVisitor = () => {
     clearErrors,
     trigger,
   } = useForm();
-
   const phoneValue = watch("phone");
-
-  // Parse comma-separated search terms for visitor list
-  const parseSearchTerms = (searchString) => {
-    if (!searchString) return [];
-
-    return searchString
-      .split(",")
-      .map((term) => term.trim())
-      .filter((term) => term.length > 0);
+  const selectedPurpose = watch("purpose");
+  // Normalize phone number
+  const normalizePhoneNumber = (phone) => {
+    if (!phone) return "";
+    let digits = phone.toString().replace(/\D/g, "");
+    if (digits.startsWith("88") && digits.length === 12) {
+      digits = digits.substring(2);
+    } else if (digits.startsWith("1") && digits.length === 11) {
+      digits = digits.substring(1);
+    }
+    return digits;
   };
 
-  // Debounce search term for visitor list
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset to first page when filters change
+  // Reset pagination on filter change
   useEffect(() => {
     setCurrentPage(1);
   }, [
@@ -125,53 +137,49 @@ const AddVisitor = () => {
     officerNameFilter,
     officerDepartmentFilter,
     officerDesignationFilter,
+    officerUnitFilter,
     purposeFilter,
     statusFilter,
     startTime,
     endTime,
   ]);
 
-  const formatDateTimeForAPI = (dateTimeString) => {
-    if (!dateTimeString) return "";
-    const date = new Date(dateTimeString);
-    const localTime = new Date(
-      date.getTime() - date.getTimezoneOffset() * 60000
-    );
-    return localTime.toISOString().slice(0, 19);
-  };
-
+  // Click outside handler
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        officerInputRef.current &&
-        !officerInputRef.current.contains(event.target)
-      ) {
-        setShowOfficerDropdown(false);
-      }
       if (
         designationInputRef.current &&
         !designationInputRef.current.contains(event.target)
       ) {
         setShowDesignationDropdown(false);
       }
+      if (
+        unitInputRef.current &&
+        !unitInputRef.current.contains(event.target)
+      ) {
+        setShowUnitDropdown(false);
+      }
+      if (
+        officerInputRef.current &&
+        !officerInputRef.current.contains(event.target)
+      ) {
+        setShowOfficerDropdown(false);
+      }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fixed fetchVisitors function
+  // Fetch visitors
   const fetchVisitors = useCallback(async () => {
     try {
       setListLoading(true);
       const token = localStorage.getItem("token");
-
       const params = {
         page: currentPage,
         limit: itemsPerPage,
       };
 
-      // Always send individual filters
       if (phoneFilter) params.phone = phoneFilter;
       if (nameFilter) params.name = nameFilter;
       if (officerNameFilter) params.officerName = officerNameFilter;
@@ -179,9 +187,9 @@ const AddVisitor = () => {
         params.officerDepartment = officerDepartmentFilter;
       if (officerDesignationFilter)
         params.officerDesignation = officerDesignationFilter;
+      if (officerUnitFilter) params.officerUnit = officerUnitFilter; // NEW
       if (purposeFilter !== "all") params.purpose = purposeFilter;
       if (statusFilter !== "all") params.status = statusFilter;
-
       if (debouncedSearchTerm) {
         if (debouncedSearchTerm.includes(",")) {
           params.multiSearch = debouncedSearchTerm;
@@ -189,9 +197,8 @@ const AddVisitor = () => {
           params.search = debouncedSearchTerm;
         }
       }
-
-      if (startTime) params.startTime = formatDateTimeForAPI(startTime);
-      if (endTime) params.endTime = formatDateTimeForAPI(endTime);
+      if (startTime) params.startTime = startTime;
+      if (endTime) params.endTime = endTime;
 
       const response = await axios.get(`${BASE_URL}/visitors/all`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -200,11 +207,6 @@ const AddVisitor = () => {
 
       setVisitors(response.data.visitors || []);
       setTotalVisitors(response.data.total || 0);
-
-      const totalPages = Math.ceil((response.data.total || 0) / itemsPerPage);
-      if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(1);
-      }
     } catch (error) {
       console.error("Error fetching visitors:", error);
       toast.error("Failed to fetch visitors");
@@ -220,15 +222,16 @@ const AddVisitor = () => {
     officerNameFilter,
     officerDepartmentFilter,
     officerDesignationFilter,
+    officerUnitFilter, // NEW
     purposeFilter,
     statusFilter,
     startTime,
     endTime,
   ]);
 
-  // Initialize webcam when component mounts
+  // Initialize camera
   useEffect(() => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError(true);
       toast.error("Your browser doesn't support camera access");
       return;
@@ -245,95 +248,39 @@ const AddVisitor = () => {
         toast.error("Camera access denied. Please allow camera permissions.");
       }
     };
-
     initializeCamera();
-
-    return () => {
-      if (webcamRef.current && webcamRef.current.stream) {
-        const stream = webcamRef.current.stream;
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
   }, []);
 
-  // Fetch visitors on mount and when dependencies change
-  useEffect(() => {
-    fetchVisitors();
-  }, [fetchVisitors]);
-
-  // Search officers - UPDATED to use officerSelectionSearch
-  useEffect(() => {
-    if (selectedDesignation && officerSelectionSearch) {
-      const filtered = officersByDesignation.filter(
-        (officer) =>
-          officer.name
-            .toLowerCase()
-            .includes(officerSelectionSearch.toLowerCase()) ||
-          officer.department
-            .toLowerCase()
-            .includes(officerSelectionSearch.toLowerCase())
-      );
-      setFilteredOfficers(filtered);
-    } else {
-      setFilteredOfficers(officersByDesignation);
-    }
-  }, [officerSelectionSearch, officersByDesignation, selectedDesignation]);
-
-  // Normalize phone number
-  const normalizePhoneNumber = (phone) => {
-    if (!phone) return "";
-    let digits = phone.replace(/\D/g, "");
-
-    if (digits.startsWith("88") && digits.length > 10) {
-      digits = digits.substring(2);
-    } else if (digits.startsWith("1") && digits.length === 11) {
-      // digits = digits.substring(1);
-    }
-
-    return digits;
-  };
-
-  // Check phone number
+  // Phone number check
   useEffect(() => {
     const checkPhoneNumber = async () => {
-      if (phoneValue && phoneValue.length >= 10) {
+      if (phoneValue?.length >= 10) {
         const normalizedPhone = normalizePhoneNumber(phoneValue);
+        if (normalizedPhone.length >= 10) {
+          setPhoneChecking(true);
+          try {
+            const token = localStorage.getItem("token");
+            const response = await axios.get(
+              `${BASE_URL}/visitors/check-phone/${normalizedPhone}`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
 
-        if (normalizedPhone.length < 10) {
-          setPhoneSuggestions([]);
-          setShowPhoneSuggestions(false);
-          return;
-        }
-
-        setPhoneChecking(true);
-        try {
-          const token = localStorage.getItem("token");
-          const response = await axios.get(
-            `${BASE_URL}/visitors/check-phone/${normalizedPhone}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
+            if (response.data.exists && response.data.visitors?.length > 0) {
+              setPhoneSuggestions(response.data.visitors);
+              setShowPhoneSuggestions(true);
+            } else {
+              setPhoneSuggestions([]);
+              setShowPhoneSuggestions(false);
             }
-          );
-
-          if (
-            response.data.exists &&
-            response.data.visitors &&
-            response.data.visitors.length > 0
-          ) {
-            setPhoneSuggestions(response.data.visitors);
-            setShowPhoneSuggestions(true);
-          } else {
+          } catch (error) {
+            console.error("Error checking phone number:", error);
             setPhoneSuggestions([]);
             setShowPhoneSuggestions(false);
+          } finally {
+            setPhoneChecking(false);
           }
-        } catch (error) {
-          console.error("Error checking phone number:", error);
-          setPhoneSuggestions([]);
-          setShowPhoneSuggestions(false);
-        } finally {
-          setPhoneChecking(false);
         }
       } else {
         setPhoneSuggestions([]);
@@ -342,14 +289,99 @@ const AddVisitor = () => {
       }
     };
 
-    const timer = setTimeout(() => {
-      checkPhoneNumber();
-    }, 800);
-
+    const timer = setTimeout(checkPhoneNumber, 800);
     return () => clearTimeout(timer);
   }, [phoneValue]);
 
-  // Capture photo from webcam
+  // Fetch designations
+  const fetchUniqueDesignations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${BASE_URL}/officers/designations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUniqueDesignations(response.data.designations);
+      setFilteredDesignations(response.data.designations);
+    } catch (error) {
+      console.error("Error fetching designations:", error);
+    }
+  }, []);
+
+  // Fetch units by designation
+  const fetchUnitsByDesignation = useCallback(async (designation) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${BASE_URL}/officers/units`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { designation },
+      });
+      setUniqueUnits(response.data.units || []);
+      setFilteredUnits(response.data.units || []);
+    } catch (error) {
+      console.error("Error fetching units:", error);
+    }
+  }, []);
+
+  // Fetch officers by unit
+  const fetchOfficersByUnit = useCallback(async (designation, unit) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${BASE_URL}/officers/by-designation-unit`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { designation, unit },
+        }
+      );
+      setOfficersByUnit(response.data.officers || []);
+      setFilteredOfficers(response.data.officers || []);
+    } catch (error) {
+      console.error("Error fetching officers by unit:", error);
+    }
+  }, []);
+
+  // Filter dropdowns
+  useEffect(() => {
+    if (designationSearch) {
+      setFilteredDesignations(
+        uniqueDesignations.filter((d) =>
+          d.toLowerCase().includes(designationSearch.toLowerCase())
+        )
+      );
+    } else {
+      setFilteredDesignations(uniqueDesignations);
+    }
+  }, [designationSearch, uniqueDesignations]);
+
+  useEffect(() => {
+    if (unitSearch) {
+      setFilteredUnits(
+        uniqueUnits.filter((u) =>
+          u.toLowerCase().includes(unitSearch.toLowerCase())
+        )
+      );
+    } else {
+      setFilteredUnits(uniqueUnits);
+    }
+  }, [unitSearch, uniqueUnits]);
+
+  useEffect(() => {
+    if (officerSearch) {
+      setFilteredOfficers(
+        officersByUnit.filter(
+          (officer) =>
+            officer.name.toLowerCase().includes(officerSearch.toLowerCase()) ||
+            officer.department
+              .toLowerCase()
+              .includes(officerSearch.toLowerCase())
+        )
+      );
+    } else {
+      setFilteredOfficers(officersByUnit);
+    }
+  }, [officerSearch, officersByUnit]);
+
+  // Event handlers
   const capturePhoto = () => {
     if (webcamRef.current) {
       const imageSrc = webcamRef.current.getScreenshot();
@@ -362,74 +394,42 @@ const AddVisitor = () => {
     }
   };
 
-  // Retake photo
   const retakePhoto = () => {
     setPhoto("");
     toast.success("Ready to take new photo!");
   };
 
-  // Select officer from search results
-  const selectOfficer = (officer) => {
-    setSelectedOfficer(officer);
-    setOfficerSelectionSearch(`${officer.name} - ${officer.designation}`); // CHANGED
-    setShowOfficerDropdown(false);
-    setOfficerResults([]);
+  const selectDesignation = (designation) => {
+    setSelectedDesignation(designation);
+    setDesignationSearch(designation);
+    setShowDesignationDropdown(false);
+    setSelectedUnit("");
+    setUnitSearch("");
+    setSelectedOfficer(null);
+    setOfficersByUnit([]);
+    fetchUnitsByDesignation(designation);
   };
 
-  // Fetch all unique designations
-  const fetchUniqueDesignations = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${BASE_URL}/officers/designations`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setUniqueDesignations(response.data.designations || []);
-      setFilteredDesignations(response.data.designations || []);
-    } catch (error) {
-      console.error("Error fetching designations:", error);
+  const selectUnit = (unit) => {
+    setSelectedUnit(unit);
+    setUnitSearch(unit);
+    setShowUnitDropdown(false);
+    setSelectedOfficer(null);
+    setOfficersByUnit([]);
+    if (selectedDesignation) {
+      fetchOfficersByUnit(selectedDesignation, unit);
     }
-  }, []);
+  };
 
-  // Fetch officers by designation
-  const fetchOfficersByDesignation = useCallback(async (designation) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${BASE_URL}/officers/by-designation`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: { designation },
-      });
-      setOfficersByDesignation(response.data.officers || []);
-      setFilteredOfficers(response.data.officers || []);
-    } catch (error) {
-      console.error("Error fetching officers by designation:", error);
-    }
-  }, []);
+  const selectOfficer = (officer) => {
+    setSelectedOfficer(officer);
+    setOfficerSearch(`${officer.name} - ${officer.designation}`);
+    setShowOfficerDropdown(false);
+  };
 
-  // Filter designations based on search
-  useEffect(() => {
-    if (designationFilter) {
-      const filtered = uniqueDesignations.filter((designation) =>
-        designation.toLowerCase().includes(designationFilter.toLowerCase())
-      );
-      setFilteredDesignations(filtered);
-    } else {
-      setFilteredDesignations(uniqueDesignations);
-    }
-  }, [designationFilter, uniqueDesignations]);
-
-  // Add this useEffect to fetch designations on component mount
-  useEffect(() => {
-    fetchUniqueDesignations();
-  }, [fetchUniqueDesignations]);
-
-  // Select phone suggestion
   const selectPhoneSuggestion = async (visitor) => {
     setValue("name", visitor.name);
-    setValue("address", visitor.address || "");
+    setValue("address", visitor.address);
     setShowPhoneSuggestions(false);
     clearErrors("name");
     clearErrors("address");
@@ -437,10 +437,13 @@ const AddVisitor = () => {
     toast.success("Visitor details auto-filled from previous visit!");
   };
 
-  // Add Visitor Form Submit
   const onSubmit = async (data) => {
     if (!selectedOfficer) {
       toast.error("Please select an officer");
+      return;
+    }
+    if (!photo) {
+      toast.error("Please capture a photo of the visitor");
       return;
     }
 
@@ -450,48 +453,51 @@ const AddVisitor = () => {
       return;
     }
 
-    if (!photo) {
-      toast.error("Please capture a photo of the visitor");
-      return;
-    }
-
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
+
+      // IMPORTANT: Use _id if that's what comes from the API
+      const officerId = selectedOfficer._id || selectedOfficer.id;
+
+      if (!officerId) {
+        toast.error("Officer ID is missing");
+        setIsLoading(false);
+        return;
+      }
+
       await axios.post(
         `${BASE_URL}/visitors/add`,
         {
           ...data,
           phone: normalizedPhone,
-          officerId: selectedOfficer._id,
+          officerId: officerId, // This should match what backend expects
           photo,
         },
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
       toast.success("Visitor added successfully!");
       setShowSuccess(true);
 
-      // Reset form but keep camera open
+      // Reset form but keep camera
       reset();
       setPhoto("");
       setSelectedOfficer(null);
-      setOfficerSelectionSearch(""); // CHANGED
+      setSelectedDesignation("");
+      setSelectedUnit("");
+      setDesignationSearch("");
+      setUnitSearch("");
+      setOfficerSearch("");
       setPhoneSuggestions([]);
       setShowPhoneSuggestions(false);
-      setSelectedDesignation("");
-      setDesignationSearch("");
 
       // Refresh visitor list
       fetchVisitors();
 
-      setTimeout(() => {
-        setShowSuccess(false);
-      }, 3000);
+      setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       const errorMessage =
         error.response?.data?.error || "Failed to add visitor";
@@ -501,73 +507,506 @@ const AddVisitor = () => {
     }
   };
 
-  // Visitor List Functions
-  const highlightMatchedText = (text, searchTerms) => {
-    if (!searchTerms || searchTerms.length === 0 || !text) {
-      return <span>{text}</span>;
+  // PDF Export Function (NEW)
+  const exportToPDF = async () => {
+    try {
+      toast.loading("Generating PDF with photos...", { id: "pdf-export" });
+
+      const token = localStorage.getItem("token");
+      const params = {
+        page: 1,
+        limit: 50,
+      };
+
+      // Apply current filters
+      if (phoneFilter) params.phone = phoneFilter;
+      if (nameFilter) params.name = nameFilter;
+      if (officerNameFilter) params.officerName = officerNameFilter;
+      if (officerDepartmentFilter)
+        params.officerDepartment = officerDepartmentFilter;
+      if (officerDesignationFilter)
+        params.officerDesignation = officerDesignationFilter;
+      if (officerUnitFilter) params.officerUnit = officerUnitFilter;
+      if (purposeFilter !== "all") params.purpose = purposeFilter;
+      if (statusFilter !== "all") params.status = statusFilter;
+      if (debouncedSearchTerm) {
+        if (debouncedSearchTerm.includes(","))
+          params.multiSearch = debouncedSearchTerm;
+        else params.search = debouncedSearchTerm;
+      }
+      if (startTime) params.startTime = startTime;
+      if (endTime) params.endTime = endTime;
+
+      const response = await axios.get(`${BASE_URL}/visitors/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+
+      const exportVisitors = response.data.visitors || [];
+
+      // Create PDF in portrait mode
+      const doc = new jsPDF("p", "mm", "a4");
+      let yPosition = 20;
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+
+      // Title
+      doc.setFontSize(20);
+      doc.setTextColor(46, 125, 50);
+      doc.setFont("helvetica", "bold");
+      doc.text("VISITOR REGISTER REPORT", pageWidth / 2, yPosition, {
+        align: "center",
+      });
+
+      // Report details
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+      yPosition += 8;
+
+      const today = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      // Add filter information
+      const filterInfo = [];
+      if (phoneFilter) filterInfo.push(`Phone: ${phoneFilter}`);
+      if (nameFilter) filterInfo.push(`Name: ${nameFilter}`);
+      if (officerNameFilter) filterInfo.push(`Officer: ${officerNameFilter}`);
+      if (officerDesignationFilter)
+        filterInfo.push(`Designation: ${officerDesignationFilter}`);
+      if (officerDepartmentFilter)
+        filterInfo.push(`Department: ${officerDepartmentFilter}`);
+      if (officerUnitFilter) filterInfo.push(`Unit: ${officerUnitFilter}`);
+      if (purposeFilter !== "all") filterInfo.push(`Purpose: ${purposeFilter}`);
+      if (statusFilter !== "all") filterInfo.push(`Status: ${statusFilter}`);
+      if (startTime || endTime) filterInfo.push("Time Range Filtered");
+
+      doc.text(`Generated on: ${today}`, margin, yPosition);
+      doc.text(
+        `Total Visitors: ${exportVisitors.length}`,
+        pageWidth - margin,
+        yPosition,
+        { align: "right" }
+      );
+      yPosition += 6;
+
+      if (exportVisitors.length > 0) {
+        const firstVisit = new Date(exportVisitors[0].visitTime);
+        const lastVisit = new Date(
+          exportVisitors[exportVisitors.length - 1].visitTime
+        );
+        doc.text(
+          `Period: ${format(firstVisit, "dd/MM/yyyy")} - ${format(
+            lastVisit,
+            "dd/MM/yyyy"
+          )}`,
+          margin,
+          yPosition
+        );
+        yPosition += 6;
+      }
+
+      // Show applied filters
+      if (filterInfo.length > 0) {
+        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(8);
+        doc.text(
+          `Applied Filters: ${filterInfo.join(", ")}`,
+          margin,
+          yPosition
+        );
+        doc.setTextColor(0, 0, 0);
+        yPosition += 6;
+      }
+
+      // Add a horizontal line
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPosition, pageWidth - margin, yPosition);
+      yPosition += 5;
+
+      // Process visitors for PDF
+      for (let index = 0; index < exportVisitors.length; index++) {
+        const visitor = exportVisitors[index];
+
+        // Check if we need a new page (each visitor card is 55mm height)
+        if (yPosition > pageHeight - 60) {
+          doc.addPage();
+          yPosition = 20;
+
+          // Add header for new page
+          doc.setFontSize(12);
+          doc.setTextColor(46, 125, 50);
+          doc.setFont("helvetica", "bold");
+          doc.text(
+            "VISITOR REGISTER REPORT (Continued)",
+            pageWidth / 2,
+            yPosition,
+            { align: "center" }
+          );
+
+          doc.setFontSize(9);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "normal");
+          yPosition += 8;
+          doc.text(
+            `Page ${doc.internal.getNumberOfPages()} | Visitors ${
+              index + 1
+            }-${Math.min(
+              index + 1 + Math.floor((pageHeight - 60 - yPosition) / 55),
+              exportVisitors.length
+            )}`,
+            pageWidth / 2,
+            yPosition,
+            { align: "center" }
+          );
+          yPosition += 10;
+
+          // Add line
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.5);
+          doc.line(margin, yPosition, pageWidth - margin, yPosition);
+          yPosition += 5;
+        }
+
+        // Visitor card background
+        doc.setDrawColor(230, 230, 230);
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(margin, yPosition, contentWidth, 50, 3, 3, "FD");
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, yPosition, contentWidth, 50, 3, 3, "S");
+
+        // Visitor photo (left side - 40x40mm)
+        const photoX = margin + 5;
+        const photoY = yPosition + 5;
+        const photoSize = 40;
+
+        if (visitor.photo && visitor.photo.startsWith("data:image")) {
+          try {
+            // Create an image element
+            const img = new Image();
+            img.src = visitor.photo;
+
+            await new Promise((resolve) => {
+              img.onload = () => {
+                // Calculate aspect ratio
+                const width = img.width;
+                const height = img.height;
+                const aspectRatio = width / height;
+
+                let displayWidth = photoSize;
+                let displayHeight = photoSize;
+
+                if (aspectRatio > 1) {
+                  // Landscape image
+                  displayHeight = photoSize / aspectRatio;
+                  const verticalOffset = (photoSize - displayHeight) / 2;
+                  doc.addImage(
+                    visitor.photo,
+                    "JPEG",
+                    photoX,
+                    photoY + verticalOffset,
+                    photoSize,
+                    displayHeight
+                  );
+                } else {
+                  // Portrait or square image
+                  displayWidth = photoSize * aspectRatio;
+                  const horizontalOffset = (photoSize - displayWidth) / 2;
+                  doc.addImage(
+                    visitor.photo,
+                    "JPEG",
+                    photoX + horizontalOffset,
+                    photoY,
+                    displayWidth,
+                    photoSize
+                  );
+                }
+
+                // Add photo border
+                doc.setDrawColor(180, 180, 180);
+                doc.setLineWidth(0.5);
+                doc.rect(photoX, photoY, photoSize, photoSize);
+
+                resolve();
+              };
+
+              img.onerror = () => {
+                // Placeholder if image fails
+                doc.setFillColor(245, 245, 245);
+                doc.roundedRect(
+                  photoX,
+                  photoY,
+                  photoSize,
+                  photoSize,
+                  2,
+                  2,
+                  "F"
+                );
+                doc.setTextColor(180, 180, 180);
+                doc.setFontSize(8);
+                doc.text(
+                  "Photo",
+                  photoX + photoSize / 2,
+                  photoY + photoSize / 2,
+                  { align: "center" }
+                );
+                resolve();
+              };
+            });
+          } catch (error) {
+            console.warn("Could not add photo:", error);
+            // Fallback placeholder
+            doc.setFillColor(245, 245, 245);
+            doc.roundedRect(photoX, photoY, photoSize, photoSize, 2, 2, "F");
+            doc.setTextColor(180, 180, 180);
+            doc.setFontSize(8);
+            doc.text("Photo", photoX + photoSize / 2, photoY + photoSize / 2, {
+              align: "center",
+            });
+          }
+        } else {
+          // No photo
+          doc.setFillColor(245, 245, 245);
+          doc.roundedRect(photoX, photoY, photoSize, photoSize, 2, 2, "F");
+          doc.setTextColor(180, 180, 180);
+          doc.setFontSize(8);
+          doc.text("No Photo", photoX + photoSize / 2, photoY + photoSize / 2, {
+            align: "center",
+          });
+        }
+
+        // Visitor details section (right of photo)
+        const detailsX = margin + 55; // Photo width + margin
+        const col1X = detailsX;
+        const col2X = detailsX + 70; // Second column for officer details
+
+        // Reset text color
+        doc.setTextColor(0, 0, 0);
+
+        // Visitor Number and Name
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}. ${visitor.name}`, col1X, yPosition + 10);
+
+        // Visitor Details Column
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+
+        // Row 1: Phone
+        doc.text(`Phone: ${visitor.phone}`, col1X, yPosition + 18);
+
+        // Row 2: Purpose
+        const purposeText = `Purpose: ${
+          visitor.purpose?.toUpperCase() || "N/A"
+        }`;
+        doc.text(purposeText, col1X, yPosition + 24);
+
+        // Row 3: Address (truncated if too long)
+        const addressText = `Address: ${visitor.address || "N/A"}`;
+        const maxAddressWidth = 65;
+        const truncatedAddress = doc.splitTextToSize(
+          addressText,
+          maxAddressWidth
+        );
+        doc.text(truncatedAddress[0], col1X, yPosition + 30);
+
+        // Row 4: Visit Time
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text(
+          `Visited: ${format(parseISO(visitor.visitTime), "dd/MM/yyyy HH:mm")}`,
+          col1X,
+          yPosition + 36
+        );
+
+        // Officer Details Column
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+
+        // Officer header
+        doc.setFont("helvetica", "bold");
+        doc.text("Officer Details:", col2X, yPosition + 10);
+        doc.setFont("helvetica", "normal");
+
+        // Row 1: Officer Name
+        doc.text(
+          `Name: ${visitor.officer?.name || "N/A"}`,
+          col2X,
+          yPosition + 16
+        );
+
+        // Row 2: Designation
+        doc.text(
+          `Designation: ${visitor.officer?.designation || "N/A"}`,
+          col2X,
+          yPosition + 22
+        );
+
+        // Row 3: Department
+        doc.text(
+          `Department: ${visitor.officer?.department || "N/A"}`,
+          col2X,
+          yPosition + 28
+        );
+
+        // Row 4: Unit
+        doc.text(
+          `Unit: ${visitor.officer?.unit || "N/A"}`,
+          col2X,
+          yPosition + 34
+        );
+
+        // Row 5: Status
+        const status = visitor.officer?.status || "unknown";
+        const statusColor = status === "active" ? [46, 125, 50] : [239, 68, 68];
+        doc.setTextColor(...statusColor);
+        doc.text(`Status: ${status.toUpperCase()}`, col2X, yPosition + 40);
+
+        // Reset text color for next visitor
+        doc.setTextColor(0, 0, 0);
+
+        // Add a subtle separator line between visitors
+        yPosition += 55;
+
+        if (index < exportVisitors.length - 1) {
+          doc.setDrawColor(240, 240, 240);
+          doc.setLineWidth(0.3);
+          doc.line(
+            margin + 10,
+            yPosition - 2,
+            pageWidth - margin - 10,
+            yPosition - 2
+          );
+        }
+      }
+
+      // Add page numbers and footer
+      const pageCount = doc.internal.getNumberOfPages();
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+
+        // Page number
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 10, {
+          align: "center",
+        });
+
+        // Footer text
+        doc.setFontSize(7);
+        doc.text(
+          `Visitor Management System | ${
+            exportVisitors.length
+          } visitors | Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
+          pageWidth / 2,
+          pageHeight - 5,
+          { align: "center" }
+        );
+
+        // Footer line
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.5);
+        doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+      }
+
+      // Save PDF
+      const timestamp = format(new Date(), "yyyyMMdd-HHmmss");
+      doc.save(`visitor-report-${timestamp}.pdf`);
+
+      toast.success("PDF exported successfully!", { id: "pdf-export" });
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      toast.error("Failed to export PDF. Please try again.", {
+        id: "pdf-export",
+      });
     }
+  };
 
+  // Other utility functions (highlight text, pagination, etc.)
+  const highlightMatchedText = (text, searchTerms) => {
+    if (!searchTerms?.length || !text) return <span>{text}</span>;
     let highlightedText = text.toString();
-
     searchTerms.forEach((term) => {
       if (term.trim()) {
-        const regex = new RegExp(`(${term.trim()})`, "gi");
+        const regex = new RegExp(term.trim(), "gi");
         highlightedText = highlightedText.replace(
           regex,
-          '<mark class="bg-yellow-200 text-gray-900 px-1 rounded">$1</mark>'
+          (match) =>
+            `<mark class="bg-yellow-200 text-gray-900 rounded">${match}</mark>`
         );
       }
     });
-
     return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
   };
 
-  // Get search terms for highlighting
   const searchTerms = useMemo(() => {
     const terms = [];
 
+    // ONLY include comma-separated search terms from the main search box
     if (searchTerm.includes(",")) {
-      terms.push(...parseSearchTerms(searchTerm));
+      parseSearchTerms(searchTerm).forEach((term) => terms.push(term));
     } else if (searchTerm) {
       terms.push(searchTerm);
     }
 
-    if (phoneFilter && !searchTerm.includes(",")) terms.push(phoneFilter);
-    if (nameFilter && !searchTerm.includes(",")) terms.push(nameFilter);
-    if (officerNameFilter && !searchTerm.includes(","))
-      terms.push(officerNameFilter);
-    if (officerDesignationFilter && !searchTerm.includes(","))
-      terms.push(officerDesignationFilter);
-    if (officerDepartmentFilter && !searchTerm.includes(","))
-      terms.push(officerDepartmentFilter);
-    if (purposeFilter !== "all" && !searchTerm.includes(","))
-      terms.push(purposeFilter);
+    // DO NOT add any individual filter terms here
+    // They will be handled separately for each field
 
     return terms.filter((term) => term && term.trim().length > 0);
   }, [
-    searchTerm,
-    phoneFilter,
-    nameFilter,
-    officerNameFilter,
-    officerDesignationFilter,
-    officerDepartmentFilter,
-    purposeFilter,
+    searchTerm, // ONLY keep searchTerm as dependency
   ]);
 
-  // Toggle row expansion
-  const toggleRowExpansion = (visitorId) => {
+  // Helper function to highlight text based on specific filter
+  // Helper function to highlight specific field with specific filter
+  const highlightSpecificField = (text, specificFilter) => {
+    if (!text || !specificFilter) return text;
+
+    const textStr = text.toString();
+    const filterStr = specificFilter.toString().trim();
+
+    if (!filterStr) return textStr;
+
+    return (
+      <span
+        dangerouslySetInnerHTML={{
+          __html: textStr.replace(
+            new RegExp(`(${filterStr})`, "gi"),
+            '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+          ),
+        }}
+      />
+    );
+  };
+  const parseSearchTerms = (searchString) => {
+    if (!searchString) return [];
+    return searchString
+      .split(",")
+      .map((term) => term.trim())
+      .filter((term) => term.length > 0);
+  };
+
+  // Toggle row expansion for specific visitor only (multiple rows can be open)
+  const toggleRowExpansion = (visitorId, e) => {
+    // Stop event propagation to prevent the row click from interfering
+    e?.stopPropagation();
+
     setExpandedRows((prev) => ({
       ...prev,
       [visitorId]: !prev[visitorId],
     }));
   };
 
-  // Handle search input change
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
-  // Clear filters
   const clearFilters = () => {
     setSearchTerm("");
     setPhoneFilter("");
@@ -575,6 +1014,7 @@ const AddVisitor = () => {
     setOfficerNameFilter("");
     setOfficerDepartmentFilter("");
     setOfficerDesignationFilter("");
+    setOfficerUnitFilter("");
     setStartTime("");
     setEndTime("");
     setPurposeFilter("all");
@@ -632,33 +1072,21 @@ const AddVisitor = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Get unique purposes for filters
+  // Load initial data
+  useEffect(() => {
+    fetchUniqueDesignations();
+    fetchVisitors();
+  }, [fetchUniqueDesignations, fetchVisitors]);
+
   const purposes = useMemo(() => {
     const purposeSet = new Set();
     visitors.forEach((visitor) => purposeSet.add(visitor.purpose));
     return Array.from(purposeSet);
   }, [visitors]);
 
-  // Get statistics
-  const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayVisitors = visitors.filter((v) => {
-      const visitDate = new Date(v.visitTime);
-      return visitDate >= today;
-    }).length;
-
-    return {
-      total: totalVisitors,
-      today: todayVisitors,
-      case: visitors.filter((v) => v.purpose === "case").length,
-      personal: visitors.filter((v) => v.purpose === "personal").length,
-    };
-  }, [visitors, totalVisitors]);
-
   return (
     <div className="space-y-6">
+      {/* Success Message */}
       {showSuccess && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -678,15 +1106,13 @@ const AddVisitor = () => {
               </p>
             </div>
             <div className="ml-auto pl-3">
-              <div className="-mx-1.5 -my-1.5">
-                <button
-                  onClick={() => setShowSuccess(false)}
-                  className="inline-flex rounded-md p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <FiX className="h-5 w-5" />
-                </button>
-              </div>
+              <button
+                onClick={() => setShowSuccess(false)}
+                className="inline-flex rounded-md p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"
+              >
+                <span className="sr-only">Dismiss</span>
+                <FiX className="h-5 w-5" />
+              </button>
             </div>
           </div>
         </motion.div>
@@ -704,118 +1130,119 @@ const AddVisitor = () => {
               Add New Visitor
             </h2>
 
-            <div className="space-y-4">
-              {/* Main Photo Display Area */}
-              <div className="space-y-3">
-                {photo ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="space-y-3"
-                  >
-                    <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-100">
-                      <img
-                        src={photo}
-                        alt="Captured Visitor"
-                        className="w-full h-64 object-cover"
-                      />
-                      <div className="absolute top-2 right-2">
-                        <button
-                          type="button"
-                          onClick={retakePhoto}
-                          className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
-                          title="Remove photo"
-                        >
-                          <FiX className="h-5 w-5" />
-                        </button>
-                      </div>
-                      <div className="absolute bottom-2 left-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-                        Photo Captured ✓
-                      </div>
-                    </div>
-
-                    <div className="text-center">
+            {/* Photo Display - LARGER 400px height */}
+            <div className="space-y-3">
+              {photo ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-3"
+                >
+                  <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-100">
+                    <img
+                      src={photo}
+                      alt="Captured Visitor"
+                      className="w-full h-100 object-cover"
+                    />
+                    <div className="absolute top-2 right-2">
                       <button
                         type="button"
-                        onClick={retakePhoto}
-                        className="px-4 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center font-medium mx-auto"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          retakePhoto();
+                        }}
+                        className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
+                        title="Remove photo"
                       >
-                        <FiRefreshCw className="h-4 w-4 mr-2" />
-                        Retake Photo
+                        <FiX className="h-5 w-5" />
                       </button>
                     </div>
-                  </motion.div>
-                ) : cameraError ? (
-                  <div className="space-y-3">
-                    <div className="h-64 flex flex-col items-center justify-center bg-gray-100 rounded-lg border-2 border-gray-300">
-                      <FiCamera className="h-16 w-16 text-gray-400 mb-3" />
-                      <p className="text-gray-500 font-medium">Camera Error</p>
-                      <p className="text-gray-400 text-sm text-center px-4 mt-1">
-                        Please allow camera permissions or check your camera
-                      </p>
+                    <div className="absolute bottom-2 left-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                      Photo Captured
                     </div>
+                  </div>
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        retakePhoto();
+                      }}
+                      className="px-4 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center font-medium mx-auto"
+                    >
+                      <FiRefreshCw className="h-4 w-4 mr-2" />
+                      Retake Photo
+                    </button>
+                  </div>
+                </motion.div>
+              ) : cameraError ? (
+                <div className="space-y-3">
+                  <div className="h-100 flex flex-col items-center justify-center bg-gray-100 rounded-lg border-2 border-gray-300">
+                    <FiCamera className="h-16 w-16 text-gray-400 mb-3" />
+                    <p className="text-gray-500 font-medium">Camera Error</p>
+                    <p className="text-gray-400 text-sm text-center px-4 mt-1">
+                      Please allow camera permissions or check your camera
+                    </p>
                     <p className="text-xs text-red-500 text-center">
                       Camera access is required to capture visitor photos
                     </p>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-100">
-                      <Webcam
-                        ref={webcamRef}
-                        audio={false}
-                        screenshotFormat="image/jpeg"
-                        className="w-full h-64 object-cover"
-                        videoConstraints={{
-                          facingMode: "user",
-                          width: { ideal: 640 },
-                          height: { ideal: 480 },
-                        }}
-                        onUserMediaError={() => {
-                          setCameraError(true);
-                          toast.error("Failed to access camera");
-                        }}
-                      />
-                    </div>
-
-                    <div className="text-center mb-2">
-                      <button
-                        type="button"
-                        onClick={capturePhoto}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center font-medium mx-auto"
-                      >
-                        <FiCamera className="h-4 w-4 mr-2" />
-                        Capture Photo
-                      </button>
-                    </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-100">
+                    <Webcam
+                      ref={webcamRef}
+                      audio={false}
+                      screenshotFormat="image/jpeg"
+                      className="w-full h-100 object-cover" // CHANGED: 400px height
+                      videoConstraints={{
+                        facingMode: "user",
+                        width: { ideal: 640 },
+                        height: { ideal: 580 },
+                      }}
+                      onUserMediaError={() => {
+                        setCameraError(true);
+                        toast.error("Failed to access camera");
+                      }}
+                    />
                   </div>
-                )}
-              </div>
+                  <div className="text-center mb-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        capturePhoto();
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center font-medium mx-auto"
+                    >
+                      <FiCamera className="h-4 w-4 mr-2" />
+                      Capture Photo
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-6">
-              {/* Phone Number with Suggestions */}
+              {/* Phone Input with Suggestions */}
               <div className="relative">
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   <span className="flex items-center">
                     <FiPhone className="w-4 h-4 mr-2 text-gray-600" />
-                    Mobile Number *
-                    {phoneChecking && (
-                      <span className="ml-2 text-xs text-blue-600">
-                        Checking...
-                      </span>
-                    )}
+                    Mobile Number
                   </span>
+                  {phoneChecking && (
+                    <span className="ml-2 text-xs text-blue-600">
+                      Checking...
+                    </span>
+                  )}
                 </label>
                 <div className="relative">
                   <input
                     type="tel"
                     {...register("phone", {
                       required: "Mobile number is required",
-                      pattern: {
-                        value: /^[0-9+\-\s()]+$/,
-                        message: "Invalid phone number format",
-                      },
                       minLength: {
                         value: 10,
                         message: "Phone number must be at least 10 digits",
@@ -832,7 +1259,7 @@ const AddVisitor = () => {
                       errors.phone
                         ? "border-red-500 focus:border-red-600"
                         : "border-gray-300 focus:border-green-600"
-                    }`}
+                    } placeholder-gray-500`}
                     placeholder="Enter phone number"
                     onBlur={() => setShowPhoneSuggestions(false)}
                   />
@@ -849,6 +1276,7 @@ const AddVisitor = () => {
                   </p>
                 )}
 
+                {/* Phone Suggestions */}
                 <AnimatePresence>
                   {showPhoneSuggestions && phoneSuggestions.length > 0 && (
                     <motion.div
@@ -860,7 +1288,7 @@ const AddVisitor = () => {
                       <div className="px-4 py-2 bg-green-50 border-b border-green-100">
                         <p className="text-xs font-medium text-green-700 flex items-center">
                           <FiCheck className="w-3 h-3 mr-1" />
-                          Found {phoneSuggestions.length} previous visit(s) with
+                          Found {phoneSuggestions.length} previous visits with
                           this number
                         </p>
                       </div>
@@ -888,8 +1316,7 @@ const AddVisitor = () => {
                   )}
                 </AnimatePresence>
 
-                {phoneValue &&
-                  phoneValue.length >= 10 &&
+                {phoneValue?.length >= 10 &&
                   !phoneChecking &&
                   phoneSuggestions.length === 0 && (
                     <motion.div
@@ -903,12 +1330,13 @@ const AddVisitor = () => {
                     </motion.div>
                   )}
               </div>
+
               {/* Name */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   <span className="flex items-center">
                     <FiUser className="w-4 h-4 mr-2 text-gray-600" />
-                    Full Name *
+                    Full Name
                   </span>
                 </label>
                 <input
@@ -934,18 +1362,17 @@ const AddVisitor = () => {
                   </p>
                 )}
               </div>
+
               {/* Address */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   <span className="flex items-center">
                     <FiMapPin className="w-4 h-4 mr-2 text-gray-600" />
-                    Address *
+                    Address
                   </span>
                 </label>
                 <textarea
-                  {...register("address", {
-                    required: "Address is required",
-                  })}
+                  {...register("address", { required: "Address is required" })}
                   rows={2}
                   className={`w-full px-4 py-2 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
                     errors.address
@@ -961,185 +1388,222 @@ const AddVisitor = () => {
                   </p>
                 )}
               </div>
-              {/* Officer Search with Designation and Name Dropdowns */}
-              <div className="space-y-4">
-                {/* Designation Filter */}
+
+              {/* 3-LEVEL OFFICER SELECTION - NEW */}
+
+              {/* Designation */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  <span className="flex items-center">
+                    <FiBriefcase className="w-4 h-4 mr-2 text-gray-600" />
+                    Filter by Designation
+                  </span>
+                </label>
+                <div ref={designationInputRef} className="relative">
+                  <input
+                    type="text"
+                    value={designationSearch}
+                    onChange={(e) => {
+                      setDesignationSearch(e.target.value);
+                      setShowDesignationDropdown(true);
+                    }}
+                    onFocus={() => setShowDesignationDropdown(true)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300 placeholder-gray-500"
+                    placeholder="Search designation..."
+                  />
+                  <AnimatePresence>
+                    {showDesignationDropdown &&
+                      uniqueDesignations.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute z-30 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-50 overflow-y-auto"
+                        >
+                          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-2">
+                            <div className="relative">
+                              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                              <input
+                                type="text"
+                                value={designationSearch}
+                                onChange={(e) =>
+                                  setDesignationSearch(e.target.value)
+                                }
+                                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-gray-500"
+                                placeholder="Filter designations..."
+                              />
+                            </div>
+                          </div>
+                          {filteredDesignations.map((designation) => (
+                            <button
+                              key={designation}
+                              type="button"
+                              onClick={() => selectDesignation(designation)}
+                              className="w-full text-left px-4 py-3 hover:bg-green-50 border-b border-gray-100 last:border-b-0 transition-colors group"
+                            >
+                              <div className="font-medium text-gray-900 group-hover:text-green-700">
+                                {designation}
+                              </div>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Unit - Shows after designation */}
+              {selectedDesignation && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     <span className="flex items-center">
                       <FiBriefcase className="w-4 h-4 mr-2 text-gray-600" />
-                      Filter by Designation *
+                      Select Unit
                     </span>
                   </label>
-                  <div className="relative">
+                  <div ref={unitInputRef} className="relative">
                     <input
                       type="text"
-                      value={designationSearch}
+                      value={unitSearch}
                       onChange={(e) => {
-                        setDesignationSearch(e.target.value);
-                        setShowDesignationDropdown(true);
+                        setUnitSearch(e.target.value);
+                        setShowUnitDropdown(true);
                       }}
-                      onFocus={() => setShowDesignationDropdown(true)}
-                      className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
-                      placeholder="Search designation..."
+                      onFocus={() => setShowUnitDropdown(true)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300 placeholder-gray-500"
+                      placeholder="Search unit..."
                     />
-
-                    {/* Designation Dropdown */}
                     <AnimatePresence>
-                      {showDesignationDropdown &&
-                        uniqueDesignations.length > 0 && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="absolute z-30 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-50 overflow-y-auto"
-                          >
-                            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-2">
-                              <div className="relative">
-                                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                <input
-                                  type="text"
-                                  value={designationFilter}
-                                  onChange={(e) =>
-                                    setDesignationFilter(e.target.value)
-                                  }
-                                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                  placeholder="Filter designations..."
-                                  onClick={(e) => e.stopPropagation()}
-                                />
+                      {showUnitDropdown && uniqueUnits.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-50 overflow-y-auto"
+                        >
+                          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                            <p className="text-xs font-medium text-blue-700">
+                              Found {filteredUnits.length} units
+                            </p>
+                          </div>
+                          {filteredUnits.map((unit, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => selectUnit(unit)}
+                              className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition-colors group"
+                            >
+                              <div className="font-medium text-gray-900 group-hover:text-blue-700">
+                                {unit}
                               </div>
-                            </div>
-
-                            {filteredDesignations.map((designation) => (
-                              <button
-                                key={designation}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedDesignation(designation);
-                                  setDesignationSearch(designation);
-                                  setShowDesignationDropdown(false);
-                                  setDesignationFilter("");
-                                  fetchOfficersByDesignation(designation);
-                                }}
-                                className="w-full text-left px-4 py-3 hover:bg-green-50 border-b border-gray-100 last:border-b-0 transition-colors group"
-                              >
-                                <div className="font-medium text-gray-900 group-hover:text-green-700">
-                                  {designation}
-                                </div>
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
                     </AnimatePresence>
                   </div>
                 </div>
+              )}
 
-                {/* Officer Selection - Only show if designation is selected */}
-                {selectedDesignation && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      <span className="flex items-center">
-                        <FiUser className="w-4 h-4 mr-2 text-gray-600" />
-                        Select Officer *
-                      </span>
-                    </label>
-                    <div
-                      ref={selectedDesignation ? officerInputRef : null}
-                      className="relative"
-                    >
-                      <input
-                        type="text"
-                        value={officerSelectionSearch} // CHANGED
-                        onChange={(e) => {
-                          setOfficerSelectionSearch(e.target.value); // CHANGED
-                          setShowOfficerDropdown(true);
-                        }}
-                        onFocus={() => setShowOfficerDropdown(true)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300"
-                        placeholder={`Search officers in ${selectedDesignation}...`}
-                        disabled={!selectedDesignation}
-                      />
-
-                      {/* Selected Officer Display */}
-                      {selectedOfficer && (
-                        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium text-green-900">
-                                {selectedOfficer.name}
-                              </div>
-                              <div className="text-sm text-green-700">
-                                {selectedOfficer.designation} -{" "}
-                                {selectedOfficer.department}
-                              </div>
-                              {selectedOfficer.bpNumber && (
-                                <div className="text-xs text-green-600 mt-1">
-                                  BP: {selectedOfficer.bpNumber}
-                                </div>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedOfficer(null);
-                                setOfficerSelectionSearch(""); // CHANGED
-                              }}
-                              className="p-1 text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors"
-                            >
-                              <FiX className="h-5 w-5" />
-                            </button>
+              {/* Officer - Shows after unit */}
+              {selectedUnit && selectedDesignation && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    <span className="flex items-center">
+                      <FiUser className="w-4 h-4 mr-2 text-gray-600" />
+                      Select Officer
+                    </span>
+                  </label>
+                  <div ref={officerInputRef} className="relative">
+                    <input
+                      type="text"
+                      value={officerSearch}
+                      onChange={(e) => {
+                        setOfficerSearch(e.target.value);
+                        setShowOfficerDropdown(true);
+                      }}
+                      onFocus={() => setShowOfficerDropdown(true)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-green-600 transition-all duration-300 placeholder-gray-500"
+                      placeholder={`Search officers in ${selectedDesignation} - ${selectedUnit}...`}
+                    />
+                    <AnimatePresence>
+                      {showOfficerDropdown && filteredOfficers.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+                        >
+                          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                            <p className="text-xs font-medium text-blue-700">
+                              Found {filteredOfficers.length} officers
+                            </p>
                           </div>
-                        </div>
+                          {filteredOfficers.map((officer) => (
+                            <button
+                              key={officer.id}
+                              type="button"
+                              onClick={() => selectOfficer(officer)}
+                              className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition-colors group"
+                            >
+                              <div className="font-medium text-gray-900 group-hover:text-blue-700">
+                                {officer.name}
+                              </div>
+                              <div className="text-sm text-gray-500 group-hover:text-blue-600">
+                                {officer.designation} - {officer.department} |
+                                BP: {officer.bpNumber}
+                              </div>
+                            </button>
+                          ))}
+                        </motion.div>
                       )}
-
-                      {/* Officer Dropdown */}
-                      <AnimatePresence>
-                        {showOfficerDropdown && filteredOfficers.length > 0 && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto"
-                          >
-                            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
-                              <p className="text-xs font-medium text-blue-700">
-                                Found {filteredOfficers.length} officer(s)
-                              </p>
-                            </div>
-                            {filteredOfficers.map((officer) => (
-                              <button
-                                key={officer._id}
-                                type="button"
-                                onClick={() => selectOfficer(officer)}
-                                className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition-colors group"
-                              >
-                                <div className="font-medium text-gray-900 group-hover:text-blue-700">
-                                  {officer.name}
-                                </div>
-                                <div className="text-sm text-gray-500 group-hover:text-blue-600">
-                                  {officer.designation} - {officer.department}{" "}
-                                  {officer.bpNumber &&
-                                    `| BP: ${officer.bpNumber}`}
-                                </div>
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                    </AnimatePresence>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Selected Officer Display */}
+              {selectedOfficer && (
+                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-green-900">
+                        {selectedOfficer.name}
+                      </div>
+                      <div className="text-sm text-green-700">
+                        {selectedOfficer.designation} -{" "}
+                        {selectedOfficer.department}
+                      </div>
+                      <div className="text-xs text-green-600 mt-1">
+                        BP: {selectedOfficer.bpNumber}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedOfficer(null);
+                        setOfficerSearch("");
+                        setSelectedUnit("");
+                        setUnitSearch("");
+                      }}
+                      className="p-1 text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors"
+                    >
+                      <FiX className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Purpose */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Purpose *
+                  Purpose
                 </label>
                 <select
-                  {...register("purpose", {
-                    required: "Purpose is required",
-                  })}
+                  {...register("purpose", { required: "Purpose is required" })}
                   className={`w-full px-4 py-2 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
                     errors.purpose
                       ? "border-red-500 focus:border-red-600"
@@ -1158,42 +1622,43 @@ const AddVisitor = () => {
                 )}
               </div>
 
-              <div className="pt-4">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="submit"
-                  disabled={isLoading || !selectedOfficer || !photo}
-                  className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? (
-                    <>
-                      <svg
-                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Adding Visitor...
-                    </>
-                  ) : (
-                    "Add Visitor"
-                  )}
-                </motion.button>
-              </div>
+              {/* Submit Button */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={
+                  isLoading || !selectedOfficer || !photo || !selectedPurpose
+                }
+                className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Adding Visitor...
+                  </>
+                ) : (
+                  "Add Visitor"
+                )}
+              </motion.button>
             </form>
           </div>
         </motion.div>
@@ -1209,21 +1674,19 @@ const AddVisitor = () => {
             <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">
-                      Visitor List
-                    </h2>
-                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Visitor List
+                  </h2>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-gray-900">
-                    {stats.total}
+                    {totalVisitors}
                   </p>
                   <p className="text-sm text-gray-600">Total Visitors</p>
                 </div>
               </div>
 
-              {/* Search and Filters */}
+              {/* Search and Filter Controls + NEW PDF Export */}
               <div className="space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center gap-3">
                   <div className="flex-1">
@@ -1234,8 +1697,8 @@ const AddVisitor = () => {
                       <input
                         type="text"
                         value={searchTerm}
-                        onChange={handleSearchChange}
-                        className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 placeholder-gray-500"
                         placeholder="Search visitors..."
                       />
                       {searchTerm && (
@@ -1249,16 +1712,29 @@ const AddVisitor = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
+                    {/* NEW: PDF Export Button */}
                     <button
-                      onClick={() => setShowFilters(!showFilters)}
-                      className="flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                      onClick={exportToPDF}
+                      className="cursor-pointer flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                      title="Export filtered data to PDF"
+                    >
+                      <FiDownload className="h-4 w-4 mr-2" />
+                      Export PDF
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowFilters(!showFilters);
+                      }}
+                      className="cursor-pointer flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
                     >
                       <FiFilter className="h-4 w-4 mr-2" />
-                      {showFilters ? "Hide" : "Filters"}
+                      {showFilters ? "Hide Filters" : "Filters"}
                     </button>
                     <button
                       onClick={fetchVisitors}
-                      className="flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                      className="cursor-pointer flex items-center px-3 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
                     >
                       <FiRefreshCw className="h-4 w-4 mr-2" />
                       Refresh
@@ -1274,7 +1750,7 @@ const AddVisitor = () => {
                     exit={{ opacity: 0, height: 0 }}
                     className="pt-4 border-t border-gray-300 space-y-4"
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Phone
@@ -1283,7 +1759,7 @@ const AddVisitor = () => {
                           type="text"
                           value={phoneFilter}
                           onChange={(e) => setPhoneFilter(e.target.value)}
-                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm placeholder-gray-500"
                           placeholder="Filter by phone..."
                         />
                       </div>
@@ -1295,7 +1771,7 @@ const AddVisitor = () => {
                           type="text"
                           value={nameFilter}
                           onChange={(e) => setNameFilter(e.target.value)}
-                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm placeholder-gray-500"
                           placeholder="Filter by name..."
                         />
                       </div>
@@ -1307,8 +1783,49 @@ const AddVisitor = () => {
                           type="text"
                           value={officerNameFilter}
                           onChange={(e) => setOfficerNameFilter(e.target.value)}
-                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm placeholder-gray-500"
                           placeholder="Filter by officer..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Officer Designation
+                        </label>
+                        <input
+                          type="text"
+                          value={officerDesignationFilter}
+                          onChange={(e) =>
+                            setOfficerDesignationFilter(e.target.value)
+                          }
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm placeholder-gray-500"
+                          placeholder="Filter by designation..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Officer Department
+                        </label>
+                        <input
+                          type="text"
+                          value={officerDepartmentFilter}
+                          onChange={(e) =>
+                            setOfficerDepartmentFilter(e.target.value)
+                          }
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm placeholder-gray-500"
+                          placeholder="Filter by department..."
+                        />
+                      </div>
+                      {/* NEW: Officer Unit Filter */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Officer Unit
+                        </label>
+                        <input
+                          type="text"
+                          value={officerUnitFilter}
+                          onChange={(e) => setOfficerUnitFilter(e.target.value)}
+                          className="w-full px-3 py-1.5 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm placeholder-gray-500"
+                          placeholder="Filter by unit..."
                         />
                       </div>
                       <div>
@@ -1343,41 +1860,41 @@ const AddVisitor = () => {
                           <option value="inactive">Inactive Only</option>
                         </select>
                       </div>
-                      <div className="md:col-span-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Time Range Filter
-                        </label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">
-                              Start Time
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={startTime}
-                              onChange={(e) => setStartTime(e.target.value)}
-                              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">
-                              End Time
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={endTime}
-                              onChange={(e) => setEndTime(e.target.value)}
-                              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Filter visitors who visited between the selected time
-                          range
-                        </p>
-                      </div>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="lg:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Time Range Filter
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">
+                            Start Time
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={startTime}
+                            onChange={(e) => setStartTime(e.target.value)}
+                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">
+                            End Time
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={endTime}
+                            onChange={(e) => setEndTime(e.target.value)}
+                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Filter visitors who visited between the selected time
+                        range
+                      </p>
+                    </div>
+                    <div className="flex justify-end">
                       <button
                         onClick={clearFilters}
                         className="px-3 py-1.5 text-sm text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -1389,11 +1906,10 @@ const AddVisitor = () => {
                 )}
               </div>
             </div>
-
-            {/* Pagination Controls */}
             {visitors.length > 0 && (
               <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  {/* Items per page selector */}
                   <div className="flex items-center space-x-3">
                     <span className="text-sm text-gray-600">Show:</span>
                     <select
@@ -1402,32 +1918,35 @@ const AddVisitor = () => {
                         setItemsPerPage(Number(e.target.value));
                         setCurrentPage(1);
                       }}
-                      className="px-2 py-1 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300 text-sm"
+                      className="px-3 py-1 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
                     >
                       <option value={10}>10</option>
                       <option value={20}>20</option>
                       <option value={50}>50</option>
+                      <option value={100}>100</option>
                     </select>
                     <span className="text-sm text-gray-600">per page</span>
                   </div>
 
-                  <div className="flex items-center space-x-1">
+                  {/* Pagination buttons */}
+                  <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="p-1.5 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       title="Previous page"
                     >
-                      <FiChevronLeft className="h-4 w-4" />
+                      <FiChevronLeft className="h-5 w-5" />
                     </button>
 
+                    {/* Page numbers */}
                     <div className="flex items-center space-x-1">
                       {getPageNumbers().map((pageNumber, index) => (
                         <button
                           key={index}
                           onClick={() => handlePageChange(pageNumber)}
                           disabled={pageNumber === "..."}
-                          className={`min-w-8 h-8 flex items-center justify-center rounded-lg border-2 transition-all duration-300 text-sm ${
+                          className={`min-w-10 h-10 flex items-center justify-center rounded-lg border-2 transition-all duration-300 ${
                             pageNumber === currentPage
                               ? "bg-green-600 text-white border-green-600 font-medium"
                               : pageNumber === "..."
@@ -1443,16 +1962,15 @@ const AddVisitor = () => {
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="p-1.5 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       title="Next page"
                     >
-                      <FiChevronRight className="h-4 w-4" />
+                      <FiChevronRight className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
               </div>
             )}
-
             {/* Visitors Table */}
             <div className="bg-white rounded-xl shadow-lg border border-gray-300 overflow-hidden">
               {listLoading ? (
@@ -1470,185 +1988,347 @@ const AddVisitor = () => {
                     phoneFilter ||
                     nameFilter ||
                     officerNameFilter ||
+                    officerDesignationFilter ||
+                    officerDepartmentFilter ||
+                    officerUnitFilter ||
+                    startTime ||
+                    endTime ||
                     purposeFilter !== "all"
                       ? "Try changing your filters or search term"
                       : "No visitors have been registered yet"}
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-300">
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Visitor
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Contact
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Officer
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Visit Time
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {visitors.map((visitor) => (
-                        <React.Fragment key={visitor._id}>
-                          <motion.tr
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="hover:bg-gray-50 cursor-pointer text-sm"
-                            onClick={() => toggleRowExpansion(visitor._id)}
-                          >
-                            <td className="px-4 py-3">
-                              <div className="flex items-center">
-                                <div className="h-8 w-8 shrink-0">
-                                  {visitor.photo ? (
-                                    <img
-                                      src={visitor.photo}
-                                      alt={visitor.name}
-                                      className="h-8 w-8 rounded-full object-cover border border-gray-300"
+                <>
+                  <div className="text-center text-sm text-gray-600 py-3 border-b border-gray-200">
+                    Showing {visitors.length} of {totalVisitors} visitors on
+                    page {currentPage} of {totalPages}
+                    {searchTerms.length > 0 && (
+                      <span className="ml-2 text-yellow-600 font-medium">
+                        ({searchTerms.length} search term
+                        {searchTerms.length > 1 ? "s" : ""} active)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-300">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Visitor
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Contact
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Officer
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Visit Time
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {visitors.map((visitor) => (
+                          <React.Fragment key={visitor._id}>
+                            <tr
+                              className="hover:bg-gray-50 cursor-pointer text-sm"
+                              onClick={() => toggleRowExpansion(visitor._id)}
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-center">
+                                  <div className="h-12 w-12 shrink-0">
+                                    {visitor.photo ? (
+                                      <img
+                                        src={visitor.photo}
+                                        alt={visitor.name}
+                                        className="h-12 w-12 rounded-full object-cover border border-gray-300"
+                                      />
+                                    ) : (
+                                      <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                                        <span className="text-green-600 font-bold text-sm">
+                                          {visitor.name.charAt(0).toUpperCase()}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="ml-3">
+                                    <div className="font-medium text-gray-900">
+                                      {/* Highlight only if nameFilter is used */}
+                                      {nameFilter ? (
+                                        <span
+                                          dangerouslySetInnerHTML={{
+                                            __html:
+                                              visitor.name
+                                                ?.toString()
+                                                ?.replace(
+                                                  new RegExp(
+                                                    `(${nameFilter})`,
+                                                    "gi"
+                                                  ),
+                                                  '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                ) || "",
+                                          }}
+                                        />
+                                      ) : (
+                                        highlightMatchedText(
+                                          visitor.name,
+                                          searchTerms
+                                        )
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 capitalize">
+                                      {highlightMatchedText(
+                                        visitor.purpose,
+                                        searchTerms
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-gray-900">
+                                  {/* Highlight only if phoneFilter is used */}
+                                  {phoneFilter ? (
+                                    <span
+                                      dangerouslySetInnerHTML={{
+                                        __html:
+                                          visitor.phone
+                                            ?.toString()
+                                            ?.replace(
+                                              new RegExp(
+                                                `(${phoneFilter})`,
+                                                "gi"
+                                              ),
+                                              '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                            ) || "",
+                                      }}
                                     />
                                   ) : (
-                                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-                                      <span className="text-green-600 font-bold text-xs">
-                                        {visitor.name.charAt(0).toUpperCase()}
-                                      </span>
-                                    </div>
+                                    highlightMatchedText(
+                                      visitor.phone,
+                                      searchTerms
+                                    )
                                   )}
                                 </div>
-                                <div className="ml-3">
-                                  <div className="font-medium text-gray-900">
-                                    {highlightMatchedText(
-                                      visitor.name,
-                                      searchTerms
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-gray-500 capitalize">
-                                    {highlightMatchedText(
-                                      visitor.purpose,
-                                      searchTerms
-                                    )}
-                                  </div>
+                                <div className="text-xs text-gray-500 truncate max-w-37.5">
+                                  {highlightMatchedText(
+                                    visitor.address,
+                                    searchTerms
+                                  )}
                                 </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="text-gray-900">
-                                {highlightMatchedText(
-                                  visitor.phone,
-                                  searchTerms
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500 truncate max-w-37.5">
-                                {highlightMatchedText(
-                                  visitor.address,
-                                  searchTerms
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="text-gray-900">
-                                {highlightMatchedText(
-                                  visitor.officer?.name,
-                                  searchTerms
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {highlightMatchedText(
-                                  visitor.officer?.designation,
-                                  searchTerms
-                                )}
-                              </div>
-                              <div className={`py-1 text-xs `}>
-                                Status:{" "}
-                                <span
-                                  className={`text-xs ${
-                                    visitor.officer?.status === "active"
-                                      ? "text-green-600"
-                                      : "text-red-600"
-                                  }`}
-                                >
-                                  {visitor.officer?.status}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="text-gray-900">
-                                {format(
-                                  parseISO(visitor.visitTime),
-                                  "MMM dd yyyy"
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {format(
-                                  parseISO(visitor.visitTime),
-                                  "hh:mm:ss a"
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleRowExpansion(visitor._id);
-                                }}
-                                className="px-2 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-gray-900">
+                                  {/* Highlight officer name if officerNameFilter is used */}
+                                  {officerNameFilter ? (
+                                    <span
+                                      dangerouslySetInnerHTML={{
+                                        __html:
+                                          visitor.officer?.name
+                                            ?.toString()
+                                            ?.replace(
+                                              new RegExp(
+                                                `(${officerNameFilter})`,
+                                                "gi"
+                                              ),
+                                              '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+                                            ) || "N/A",
+                                      }}
+                                    />
+                                  ) : (
+                                    highlightMatchedText(
+                                      visitor.officer?.name,
+                                      searchTerms
+                                    )
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Designation:
+                                  <span className="ml-1 font-medium">
+                                    {/* Highlight designation if officerDesignationFilter is used */}
+                                    {officerDesignationFilter ? (
+                                      <span
+                                        dangerouslySetInnerHTML={{
+                                          __html:
+                                            visitor.officer?.designation
+                                              ?.toString()
+                                              ?.replace(
+                                                new RegExp(
+                                                  `(${officerDesignationFilter})`,
+                                                  "gi"
+                                                ),
+                                                '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+                                              ) || "N/A",
+                                        }}
+                                      />
+                                    ) : (
+                                      highlightMatchedText(
+                                        visitor.officer?.designation,
+                                        searchTerms
+                                      )
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Department:
+                                  <span className="ml-1 font-medium">
+                                    {/* Highlight department if officerDepartmentFilter is used */}
+                                    {officerDepartmentFilter ? (
+                                      <span
+                                        dangerouslySetInnerHTML={{
+                                          __html:
+                                            visitor.officer?.department
+                                              ?.toString()
+                                              ?.replace(
+                                                new RegExp(
+                                                  `(${officerDepartmentFilter})`,
+                                                  "gi"
+                                                ),
+                                                '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                              ) || "N/A",
+                                        }}
+                                      />
+                                    ) : (
+                                      highlightMatchedText(
+                                        visitor.officer?.department,
+                                        searchTerms
+                                      )
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Unit:
+                                  <span className="ml-1 font-medium">
+                                    {/* Highlight unit if officerUnitFilter is used */}
+                                    {officerUnitFilter ? (
+                                      <span
+                                        dangerouslySetInnerHTML={{
+                                          __html:
+                                            visitor.officer?.unit
+                                              ?.toString()
+                                              ?.replace(
+                                                new RegExp(
+                                                  `(${officerUnitFilter})`,
+                                                  "gi"
+                                                ),
+                                                '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+                                              ) || "N/A",
+                                        }}
+                                      />
+                                    ) : (
+                                      visitor.officer?.unit || "N/A"
+                                    )}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-gray-900">
+                                  {format(
+                                    parseISO(visitor.visitTime),
+                                    "MMM dd yyyy"
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {format(
+                                    parseISO(visitor.visitTime),
+                                    "hh:mm:ss a"
+                                  )}
+                                </div>
+                              </td>
+                              <td
+                                className="px-4 py-3"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                {expandedRows[visitor._id] ? "Hide" : "View"}
-                              </button>
-                            </td>
-                          </motion.tr>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleRowExpansion(visitor._id);
+                                  }}
+                                  className="px-3 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                                >
+                                  {expandedRows[visitor._id] ? "Hide" : "View"}
+                                </button>
+                              </td>
+                            </tr>
 
-                          {/* Expanded Row Details */}
-                          {expandedRows[visitor._id] && (
-                            <motion.tr
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              className="bg-gray-50"
-                            >
-                              <td colSpan="5" className="px-4 py-3">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-gray-900 mb-2">
-                                      Visitor Details
-                                    </h4>
-                                    <div className="space-y-1 text-sm">
-                                      <div className="flex items-center">
-                                        <FiUser className="h-3 w-3 text-gray-400 mr-2" />
-                                        <span className="text-gray-600">
-                                          Name:{" "}
-                                        </span>
-                                        <span className="ml-2 font-medium">
-                                          {highlightMatchedText(
-                                            visitor.name,
-                                            searchTerms
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        <FiPhone className="h-3 w-3 text-gray-400 mr-2" />
-                                        <span className="text-gray-600">
-                                          Phone:{" "}
-                                        </span>
-                                        <span className="ml-2 font-medium">
-                                          {highlightMatchedText(
-                                            visitor.phone,
-                                            searchTerms
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-start">
-                                        <FiMapPin className="h-3 w-3 text-gray-400 mr-2 mt-0.5" />
-                                        <div>
+                            {/* Expanded Row */}
+                            {expandedRows[visitor._id] && (
+                              <tr className="bg-gray-50">
+                                <td colSpan={5} className="px-4 py-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Visitor Details in Expanded Row */}
+                                    <div>
+                                      <h4 className="text-xs font-semibold text-gray-900 mb-2">
+                                        Visitor Details
+                                      </h4>
+                                      <div className="space-y-1 text-sm">
+                                        <div className="flex items-center">
+                                          <FiUser className="h-3 w-3 text-gray-400 mr-2 mt-0.5" />
                                           <span className="text-gray-600">
-                                            Address:{" "}
+                                            Name
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {nameFilter ? (
+                                              <span
+                                                dangerouslySetInnerHTML={{
+                                                  __html:
+                                                    visitor.name
+                                                      ?.toString()
+                                                      ?.replace(
+                                                        new RegExp(
+                                                          `(${nameFilter})`,
+                                                          "gi"
+                                                        ),
+                                                        '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                      ) || "",
+                                                }}
+                                              />
+                                            ) : (
+                                              highlightMatchedText(
+                                                visitor.name,
+                                                searchTerms
+                                              )
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <FiPhone className="h-3 w-3 text-gray-400 mr-2 mt-0.5" />
+                                          <span className="text-gray-600">
+                                            Phone
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {phoneFilter ? (
+                                              <span
+                                                dangerouslySetInnerHTML={{
+                                                  __html:
+                                                    visitor.phone
+                                                      ?.toString()
+                                                      ?.replace(
+                                                        new RegExp(
+                                                          `(${phoneFilter})`,
+                                                          "gi"
+                                                        ),
+                                                        '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                      ) || "",
+                                                }}
+                                              />
+                                            ) : (
+                                              highlightMatchedText(
+                                                visitor.phone,
+                                                searchTerms
+                                              )
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <FiMapPin className="h-3 w-3 text-gray-400 mr-2 mt-0.5" />
+                                          <span className="text-gray-600">
+                                            Address
                                           </span>
                                           <span className="ml-2 font-medium">
                                             {highlightMatchedText(
@@ -1659,100 +2339,153 @@ const AddVisitor = () => {
                                         </div>
                                       </div>
                                     </div>
-                                  </div>
 
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-gray-900 mb-2">
-                                      Officer Details
-                                    </h4>
-                                    <div className="space-y-1 text-sm">
-                                      <div className="flex items-center">
-                                        <FiUser className="h-3 w-3 text-gray-400 mr-2" />
-                                        <span className="text-gray-600">
-                                          Officer:{" "}
-                                        </span>
-                                        <span className="ml-2 font-medium">
-                                          {highlightMatchedText(
-                                            visitor.officer?.name,
-                                            searchTerms
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        <FiBriefcase className="h-3 w-3 text-gray-400 mr-2" />
-                                        <span className="text-gray-600">
-                                          Designation:{" "}
-                                        </span>
-                                        <span className="ml-2 font-medium">
-                                          {highlightMatchedText(
-                                            visitor.officer?.designation,
-                                            searchTerms
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        <FiBriefcase className="h-3 w-3 text-gray-400 mr-2" />
-                                        <span className="text-gray-600">
-                                          Department:{" "}
-                                        </span>
-                                        <span className="ml-2 font-medium">
-                                          {highlightMatchedText(
-                                            visitor.officer?.department,
-                                            searchTerms
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center">
-                                        <span className="text-gray-600 mr-2">
-                                          Status:
-                                        </span>
-                                        <span
-                                          className={`ml-2 font-medium ${
-                                            visitor.officer?.status === "active"
-                                              ? "text-green-600"
-                                              : "text-red-600"
-                                          }`}
-                                        >
-                                          {visitor.officer?.status}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {visitor.photo && (
-                                    <div className="md:col-span-2">
-                                      <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                                        Visitor Photo
+                                    {/* Officer Details in Expanded Row */}
+                                    <div>
+                                      <h4 className="text-xs font-semibold text-gray-900 mb-2">
+                                        Officer Details
                                       </h4>
-                                      <div className="flex justify-center">
-                                        <img
-                                          src={visitor.photo}
-                                          alt={visitor.name}
-                                          className="h-full w-64 object-contain"
-                                        />
+                                      <div className="space-y-1 text-sm">
+                                        <div className="flex items-center">
+                                          <FiUser className="h-3 w-3 text-gray-400 mr-2" />
+                                          <span className="text-gray-600">
+                                            Officer
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {officerNameFilter ? (
+                                              <span
+                                                dangerouslySetInnerHTML={{
+                                                  __html:
+                                                    visitor.officer?.name
+                                                      ?.toString()
+                                                      ?.replace(
+                                                        new RegExp(
+                                                          `(${officerNameFilter})`,
+                                                          "gi"
+                                                        ),
+                                                        '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                      ) || "N/A",
+                                                }}
+                                              />
+                                            ) : (
+                                              highlightMatchedText(
+                                                visitor.officer?.name,
+                                                searchTerms
+                                              )
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <FiBriefcase className="h-3 w-3 text-gray-400 mr-2" />
+                                          <span className="text-gray-600">
+                                            Designation
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {officerDesignationFilter ? (
+                                              <span
+                                                dangerouslySetInnerHTML={{
+                                                  __html:
+                                                    visitor.officer?.designation
+                                                      ?.toString()
+                                                      ?.replace(
+                                                        new RegExp(
+                                                          `(${officerDesignationFilter})`,
+                                                          "gi"
+                                                        ),
+                                                        '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                      ) || "N/A",
+                                                }}
+                                              />
+                                            ) : (
+                                              highlightMatchedText(
+                                                visitor.officer?.designation,
+                                                searchTerms
+                                              )
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <FiBriefcase className="h-3 w-3 text-gray-400 mr-2" />
+                                          <span className="text-gray-600">
+                                            Department
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {officerDepartmentFilter ? (
+                                              <span
+                                                dangerouslySetInnerHTML={{
+                                                  __html:
+                                                    visitor.officer?.department
+                                                      ?.toString()
+                                                      ?.replace(
+                                                        new RegExp(
+                                                          `(${officerDepartmentFilter})`,
+                                                          "gi"
+                                                        ),
+                                                        '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                      ) || "N/A",
+                                                }}
+                                              />
+                                            ) : (
+                                              highlightMatchedText(
+                                                visitor.officer?.department,
+                                                searchTerms
+                                              )
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <FiLayers className="h-3 w-3 text-gray-400 mr-2" />
+                                          <span className="text-gray-600">
+                                            Unit
+                                          </span>
+                                          <span className="ml-2 font-medium">
+                                            {officerUnitFilter ? (
+                                              <span
+                                                dangerouslySetInnerHTML={{
+                                                  __html:
+                                                    visitor.officer?.unit
+                                                      ?.toString()
+                                                      ?.replace(
+                                                        new RegExp(
+                                                          `(${officerUnitFilter})`,
+                                                          "gi"
+                                                        ),
+                                                        '<mark class="bg-yellow-200 text-gray-900  rounded">$1</mark>'
+                                                      ) || "N/A",
+                                                }}
+                                              />
+                                            ) : (
+                                              visitor.officer?.unit || "N/A"
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <span className="text-gray-600 mr-1">
+                                            Status:
+                                          </span>
+                                          <span
+                                            className={`font-medium ${
+                                              visitor.officer?.status ===
+                                              "active"
+                                                ? "text-green-600"
+                                                : "text-red-600"
+                                            }`}
+                                          >
+                                            {visitor.officer?.status}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                            </motion.tr>
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Summary */}
-            <div className="text-center text-sm text-gray-600">
-              Showing {visitors.length} visitors on page {currentPage} of{" "}
-              {totalPages}
-              {searchTerms.length > 0 && (
-                <span className="ml-2 text-yellow-600 font-medium">
-                  • {searchTerms.length} search term
-                  {searchTerms.length > 1 ? "s" : ""} active
-                </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>

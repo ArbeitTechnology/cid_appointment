@@ -13,6 +13,11 @@ router.post("/add", officerController.addOfficer);
 router.get("/all", officerController.getAllOfficers);
 router.get("/designations", officerController.getUniqueDesignations);
 router.get("/by-designation", officerController.getOfficersByDesignation);
+router.get("/units", officerController.getUniqueUnits);
+router.get(
+  "/by-designation-unit",
+  officerController.getOfficersByDesignationAndUnit
+);
 // Update officer status
 router.put("/:officerId/status", officerController.updateOfficerStatus);
 router.put("/:officerId", officerController.updateOfficer);

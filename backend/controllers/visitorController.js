@@ -41,6 +41,7 @@ exports.addVisitor = async (req, res) => {
         name: officer.name,
         designation: officer.designation,
         department: officer.department,
+        unit: officer.unit,
         status: officer.status,
       },
       photo: photo || "",
@@ -61,7 +62,6 @@ exports.addVisitor = async (req, res) => {
 };
 
 // Get all visitors with search and filters
-// visitorController.js - Fixed getAllVisitors function
 exports.getAllVisitors = async (req, res) => {
   try {
     const {
@@ -71,6 +71,7 @@ exports.getAllVisitors = async (req, res) => {
       officerName,
       officerDesignation,
       officerDepartment,
+      officerUnit, // NEW
       startTime,
       endTime,
       purpose,
@@ -88,7 +89,7 @@ exports.getAllVisitors = async (req, res) => {
     // Name filter
     if (name) query.name = { $regex: name, $options: "i" };
 
-    // Officer filters - FIXED: Always apply officer filters
+    // Officer filters
     if (officerName)
       query["officer.name"] = { $regex: officerName, $options: "i" };
     if (officerDesignation)
@@ -101,22 +102,23 @@ exports.getAllVisitors = async (req, res) => {
         $regex: officerDepartment,
         $options: "i",
       };
+    if (officerUnit)
+      query["officer.unit"] = { $regex: officerUnit, $options: "i" }; // NEW
 
     // Purpose filter
     if (purpose && ["case", "personal"].includes(purpose))
       query.purpose = purpose;
 
-    // Officer status filter - CORRECTED to use populated officer status
+    // Officer status filter
     if (status && ["active", "inactive"].includes(status)) {
-      // Store status filter for post-population filtering
       req.statusFilter = status;
     }
-    // In visitorController.js - Update the time range filter section:
+
+    // Time range filter
     if (startTime && endTime) {
       const startDate = new Date(startTime);
       const endDate = new Date(endTime);
 
-      // Ensure we're comparing dates correctly
       if (!startTime.includes("T") || startTime.length === 10) {
         startDate.setHours(0, 0, 0, 0);
       }
@@ -124,7 +126,6 @@ exports.getAllVisitors = async (req, res) => {
       if (!endTime.includes("T") || endTime.length === 10) {
         endDate.setHours(23, 59, 59, 999);
       } else {
-        // If specific time is provided, use it as-is
         endDate.setSeconds(59, 999);
       }
 
@@ -162,7 +163,8 @@ exports.getAllVisitors = async (req, res) => {
             { purpose: regex },
             { "officer.name": regex },
             { "officer.designation": regex },
-            { "officer.department": regex }
+            { "officer.department": regex },
+            { "officer.unit": regex } // NEW
           );
         });
         query.$or = orConditions;
@@ -177,6 +179,7 @@ exports.getAllVisitors = async (req, res) => {
         { "officer.name": regex },
         { "officer.designation": regex },
         { "officer.department": regex },
+        { "officer.unit": regex }, // NEW
       ];
     }
 
@@ -190,13 +193,14 @@ exports.getAllVisitors = async (req, res) => {
     const visitors = await Visitor.find(query)
       .populate({
         path: "officer.officerId",
-        select: "name designation department phone bpNumber status",
+        select: "name designation department phone bpNumber unit status",
         model: "Officer",
       })
       .sort({ visitTime: -1 })
       .skip(skip)
       .limit(limitNumber)
       .select("-__v");
+
     let filteredVisitors = visitors;
     if (req.statusFilter) {
       filteredVisitors = visitors.filter((visitor) => {
@@ -209,12 +213,12 @@ exports.getAllVisitors = async (req, res) => {
 
     const transformedVisitors = filteredVisitors.map((visitor) => {
       const visitorObj = visitor.toObject();
-      // Ensure current officer status is used
       if (visitorObj.officer && visitorObj.officer.officerId) {
         visitorObj.officer.status = visitorObj.officer.officerId.status;
       }
       return visitorObj;
     });
+
     const startItem = skip + 1;
     const endItem = Math.min(skip + limitNumber, total);
 

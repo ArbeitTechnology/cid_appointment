@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
@@ -417,7 +418,10 @@ const OfficerList = () => {
 
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => setShowFilters(!showFilters)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowFilters(!showFilters);
+              }}
               className="flex items-center px-4 py-3 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <FiFilter className="h-5 w-5 mr-2" />

@@ -357,3 +357,47 @@ exports.getOfficersByDesignation = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch officers" });
   }
 };
+
+exports.getUniqueUnits = async (req, res) => {
+  try {
+    const { designation } = req.query;
+    let query = { status: "active" };
+
+    if (designation) {
+      query.designation = { $regex: designation, $options: "i" };
+    }
+
+    const units = await Officer.distinct("unit", query);
+    res.json({
+      success: true,
+      units: units.filter((u) => u).sort(),
+    });
+  } catch (error) {
+    console.error("Error fetching units:", error);
+    res.status(500).json({ error: "Failed to fetch units" });
+  }
+};
+
+// Get officers by designation and unit
+exports.getOfficersByDesignationAndUnit = async (req, res) => {
+  try {
+    const { designation, unit } = req.query;
+
+    if (!designation || !unit) {
+      return res
+        .status(400)
+        .json({ error: "Designation and unit are required" });
+    }
+
+    const officers = await Officer.find({
+      designation: { $regex: designation, $options: "i" },
+      unit: { $regex: unit, $options: "i" },
+      status: "active",
+    }).select("name designation department phone bpNumber status");
+
+    res.json({ success: true, officers });
+  } catch (error) {
+    console.error("Error fetching officers by designation and unit:", error);
+    res.status(500).json({ error: "Failed to fetch officers" });
+  }
+};
