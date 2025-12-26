@@ -951,7 +951,13 @@ const OfficerVisitorList = ({ user }) => {
                               </div>
                             )}
                           </div>
-                          <div className="mt-4">
+                        </div>
+                      </td>
+
+                      {/* Column 2: Contact Information */}
+                      <td className="px-8 py-6 align-top">
+                        <div className="space-y-6">
+                          <div className="mb-4">
                             <h3 className="text-xl font-bold text-gray-900">
                               {nameFilter ? (
                                 <span
@@ -970,12 +976,6 @@ const OfficerVisitorList = ({ user }) => {
                               )}
                             </h3>
                           </div>
-                        </div>
-                      </td>
-
-                      {/* Column 2: Contact Information */}
-                      <td className="px-8 py-6 align-top">
-                        <div className="space-y-6">
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                               <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
@@ -1020,35 +1020,6 @@ const OfficerVisitorList = ({ user }) => {
                         <div className="space-y-6">
                           <div>
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                              Purpose of Visit
-                            </p>
-                            <span className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 capitalize">
-                              {purposeFilter !== "all" ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.purpose
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(
-                                            `(${purposeFilter})`,
-                                            "gi"
-                                          ),
-                                          '<mark class="bg-yellow-100 rounded">$1</mark>'
-                                        ) || "",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(
-                                  visitor.purpose,
-                                  searchTerms
-                                )
-                              )}
-                            </span>
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                               Visit Date & Time
                             </p>
                             <div>
@@ -1069,16 +1040,13 @@ const OfficerVisitorList = ({ user }) => {
 
                           <div>
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                              Registered By
+                              Visited Officer
                             </p>
                             <div className="flex items-center">
                               <FiUser className="w-4 h-4 text-gray-500 mr-2" />
                               <div>
                                 <p className="text-sm font-medium text-gray-900">
                                   {user?.name}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {user?.designation} • {user?.department}
                                 </p>
                               </div>
                             </div>

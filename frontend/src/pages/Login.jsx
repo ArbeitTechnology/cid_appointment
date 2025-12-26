@@ -47,13 +47,10 @@ const Login = () => {
 
     try {
       // Send identifier (email or phone) instead of just email
-      const response = await axios.post(
-        `http://localhost:5000/api/auth/login`,
-        {
-          identifier: data.identifier,
-          password: data.password,
-        }
-      );
+      const response = await axios.post(`${BASE_URL}/auth/login`, {
+        identifier: data.identifier,
+        password: data.password,
+      });
 
       // Save identifier if "Remember Me" is checked
       if (rememberMe) {
