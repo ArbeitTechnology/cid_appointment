@@ -244,7 +244,117 @@ exports.getAllVisitors = async (req, res) => {
     });
   }
 };
+// Get visitors by officer ID (for officer dashboard)
+exports.getVisitorsByOfficer = async (req, res) => {
+  try {
+    const officerId = req.user.officerId || req.user._id;
 
+    const {
+      search,
+      phone,
+      name,
+      purpose,
+      startTime,
+      endTime,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    let query = {
+      "officer.officerId": officerId,
+    };
+
+    // Phone filter
+    if (phone) query.phone = { $regex: phone, $options: "i" };
+
+    // Name filter
+    if (name) query.name = { $regex: name, $options: "i" };
+
+    // Purpose filter
+    if (purpose && ["case", "personal"].includes(purpose))
+      query.purpose = purpose;
+
+    // Time range filter
+    if (startTime && endTime) {
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
+
+      if (!startTime.includes("T") || startTime.length === 10) {
+        startDate.setHours(0, 0, 0, 0);
+      }
+
+      if (!endTime.includes("T") || endTime.length === 10) {
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate.setSeconds(59, 999);
+      }
+
+      query.visitTime = { $gte: startDate, $lte: endDate };
+    } else if (startTime) {
+      const startDate = new Date(startTime);
+      if (!startTime.includes("T") || startTime.length === 10) {
+        startDate.setHours(0, 0, 0, 0);
+      }
+      query.visitTime = { $gte: startDate };
+    } else if (endTime) {
+      const endDate = new Date(endTime);
+      if (!endTime.includes("T") || endTime.length === 10) {
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate.setSeconds(59, 999);
+      }
+      query.visitTime = { $lte: endDate };
+    }
+
+    // Search filter
+    if (search) {
+      const regex = new RegExp(search, "i");
+      query.$or = [
+        { name: regex },
+        { phone: regex },
+        { address: regex },
+        { purpose: regex },
+      ];
+    }
+
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const total = await Visitor.countDocuments(query);
+    const totalPages = Math.ceil(total / limitNumber);
+
+    const visitors = await Visitor.find(query)
+      .sort({ visitTime: -1 })
+      .skip(skip)
+      .limit(limitNumber)
+      .select("-__v");
+
+    const startItem = skip + 1;
+    const endItem = Math.min(skip + limitNumber, total);
+
+    res.json({
+      success: true,
+      count: visitors.length,
+      total,
+      page: pageNumber,
+      pages: totalPages,
+      limit: limitNumber,
+      hasNextPage: pageNumber < totalPages,
+      hasPrevPage: pageNumber > 1,
+      startItem,
+      endItem,
+      visitors,
+    });
+  } catch (error) {
+    console.error("Error fetching officer visitors:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch visitors",
+      message: error.message,
+    });
+  }
+};
 // Check if phone number exists and get visitor details
 exports.checkPhoneNumber = async (req, res) => {
   try {

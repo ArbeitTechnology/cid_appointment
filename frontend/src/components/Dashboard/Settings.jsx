@@ -14,11 +14,14 @@ import {
   FiSave,
   FiCheck,
   FiAlertCircle,
+  FiShield,
 } from "react-icons/fi";
 import { useAuth } from "../../hooks/useAuth";
 
 const Settings = ({ user }) => {
   const BASE_URL = import.meta.env.VITE_API_URL;
+  const isOfficer = user?.userType === "officer";
+
   const {
     register: registerProfile,
     handleSubmit: handleSubmitProfile,
@@ -44,7 +47,13 @@ const Settings = ({ user }) => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const { logout } = useAuth();
 
+  // Officers cannot update profile, only password
   const onSubmitProfile = async (data) => {
+    if (isOfficer) {
+      toast.error("Officers cannot update profile information");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const updatedData = {
@@ -110,159 +119,163 @@ const Settings = ({ user }) => {
 
   return (
     <div className="space-y-8">
-      {/* Profile Settings Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-300"
-      >
-        <div className="px-8 py-6 border-b border-gray-300 bg-gray-50">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-black">
-              <FiUser className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-black">Profile Settings</h3>
-              <p className="text-sm text-gray-600">
-                Update your personal information
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="p-8">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Name Field */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                <span className="flex items-center">
-                  <FiUser className="w-4 h-4 mr-2 text-gray-600" />
-                  Full Name
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="name"
-                  {...registerProfile("name", {
-                    required: "Name is required",
-                    minLength: {
-                      value: 2,
-                      message: "Name must be at least 2 characters",
-                    },
-                  })}
-                  className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
-                    profileErrors.name
-                      ? "border-red-500 focus:border-red-600"
-                      : "border-gray-300 focus:border-black"
-                  }`}
-                  placeholder="John Doe"
-                />
-                <FiUser className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+      {/* Show profile settings only for non-officers */}
+      {!isOfficer && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-300"
+        >
+          <div className="px-8 py-6 border-b border-gray-300 bg-gray-50">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 rounded-lg bg-black">
+                <FiUser className="h-5 w-5 text-white" />
               </div>
-              <AnimatePresence>
-                {profileErrors.name && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="mt-2 text-sm text-red-600 flex items-center"
-                  >
-                    <FiAlertCircle className="w-4 h-4 mr-1" />
-                    {profileErrors.name.message}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Email Field */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                <span className="flex items-center">
-                  <FiMail className="w-4 h-4 mr-2 text-gray-600" />
-                  Email Address
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type="email"
-                  id="email"
-                  {...registerProfile("email", {
-                    required: "Email is required",
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: "Invalid email address",
-                    },
-                  })}
-                  className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
-                    profileErrors.email
-                      ? "border-red-500 focus:border-red-600"
-                      : "border-gray-300 focus:border-black"
-                  }`}
-                  placeholder="john@example.com"
-                />
-                <FiMail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <div>
+                <h3 className="text-xl font-bold text-black">
+                  Profile Settings
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Update your personal information
+                </p>
               </div>
-              <AnimatePresence>
-                {profileErrors.email && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="mt-2 text-sm text-red-600 flex items-center"
-                  >
-                    <FiAlertCircle className="w-4 h-4 mr-1" />
-                    {profileErrors.email.message}
-                  </motion.p>
-                )}
-              </AnimatePresence>
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-300">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="submit"
-              disabled={isLoading}
-              className="inline-flex items-center px-6 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <FiSave className="w-5 h-5 mr-2" />
-                  Save Changes
-                </>
-              )}
-            </motion.button>
-          </div>
-        </form>
-      </motion.div>
+          <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="p-8">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {/* Name Field */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  <span className="flex items-center">
+                    <FiUser className="w-4 h-4 mr-2 text-gray-600" />
+                    Full Name
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="name"
+                    {...registerProfile("name", {
+                      required: "Name is required",
+                      minLength: {
+                        value: 2,
+                        message: "Name must be at least 2 characters",
+                      },
+                    })}
+                    className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                      profileErrors.name
+                        ? "border-red-500 focus:border-red-600"
+                        : "border-gray-300 focus:border-black"
+                    }`}
+                    placeholder="John Doe"
+                  />
+                  <FiUser className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                </div>
+                <AnimatePresence>
+                  {profileErrors.name && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="mt-2 text-sm text-red-600 flex items-center"
+                    >
+                      <FiAlertCircle className="w-4 h-4 mr-1" />
+                      {profileErrors.name.message}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </div>
 
-      {/* Password Settings Card */}
+              {/* Email Field */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  <span className="flex items-center">
+                    <FiMail className="w-4 h-4 mr-2 text-gray-600" />
+                    Email Address
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    id="email"
+                    {...registerProfile("email", {
+                      required: "Email is required",
+                      pattern: {
+                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                        message: "Invalid email address",
+                      },
+                    })}
+                    className={`w-full pl-12 pr-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                      profileErrors.email
+                        ? "border-red-500 focus:border-red-600"
+                        : "border-gray-300 focus:border-black"
+                    }`}
+                    placeholder="john@example.com"
+                  />
+                  <FiMail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                </div>
+                <AnimatePresence>
+                  {profileErrors.email && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="mt-2 text-sm text-red-600 flex items-center"
+                    >
+                      <FiAlertCircle className="w-4 h-4 mr-1" />
+                      {profileErrors.email.message}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-300">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex items-center px-6 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <FiSave className="w-5 h-5 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </motion.button>
+            </div>
+          </form>
+        </motion.div>
+      )}
+
+      {/* Password Settings Card - Show for all users */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -271,7 +284,11 @@ const Settings = ({ user }) => {
       >
         <div className="px-8 py-6 border-b border-gray-300 bg-gray-50">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-black">
+            <div
+              className={`p-2 rounded-lg ${
+                isOfficer ? "bg-blue-600" : "bg-black"
+              }`}
+            >
               <FiLock className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -279,6 +296,11 @@ const Settings = ({ user }) => {
               <p className="text-sm text-gray-600">
                 Update your password security
               </p>
+              {isOfficer && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Officers can only change their password
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -490,7 +512,11 @@ const Settings = ({ user }) => {
                 !newPassword ||
                 newPassword === currentPassword
               }
-              className="inline-flex items-center px-6 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`inline-flex items-center px-6 py-3 ${
+                isOfficer
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-black hover:bg-gray-800"
+              } text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {isPasswordLoading ? (
                 <>

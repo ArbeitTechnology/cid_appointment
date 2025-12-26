@@ -18,12 +18,16 @@ router.get(
   "/by-designation-unit",
   officerController.getOfficersByDesignationAndUnit
 );
+router.get("/profile/me", officerController.getOfficerProfile);
+
 // Update officer status
 router.put("/:officerId/status", officerController.updateOfficerStatus);
 router.put("/:officerId", officerController.updateOfficer);
+router.put("/:officerId/admin-role", officerController.updateOfficerAdminRole);
 
 // Delete officer
 router.delete("/:officerId", officerController.deleteOfficer);
+
 // Search officers (for visitor form)
 router.get("/search", officerController.searchOfficers);
 

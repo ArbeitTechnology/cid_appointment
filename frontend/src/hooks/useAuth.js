@@ -43,9 +43,15 @@ export const AuthProvider = ({ children }) => {
         if (error.response?.status === 401) {
           if (
             !error.config?.url?.includes("/auth/login") &&
-            !error.config?.url?.includes("/auth/register")
+            !error.config?.url?.includes("/auth/register") &&
+            !error.config?.url?.includes("/auth/forgot-password") &&
+            !error.config?.url?.includes("/auth/reset-password")
           ) {
             logout();
+            toast.error("Session expired. Please login again.", {
+              duration: 3000,
+              position: "top-center",
+            });
           }
         }
         return Promise.reject(error);
@@ -67,6 +73,22 @@ export const AuthProvider = ({ children }) => {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
           setToken(storedToken);
+
+          // Optional: Validate token by making a profile request
+          try {
+            await axios.get(`${BASE_URL}/auth/profile`, {
+              headers: { Authorization: `Bearer ${storedToken}` },
+            });
+          } catch (error) {
+            console.error("Token validation failed:", error);
+            if (error.response?.status === 401) {
+              logout();
+              toast.error("Session expired. Please login again.", {
+                duration: 3000,
+                position: "top-center",
+              });
+            }
+          }
         } catch (error) {
           console.error("Error parsing user data:", error);
           localStorage.removeItem("user");
@@ -80,10 +102,32 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = useCallback((userData, token) => {
-    localStorage.setItem("user", JSON.stringify(userData));
+    // Normalize user data structure
+    const normalizedUser = {
+      ...userData,
+      // Ensure consistent userType
+      userType: userData.userType || (userData.isOfficer ? "officer" : "user"),
+      // Ensure hasAdminRole is boolean
+      hasAdminRole:
+        userData.hasAdminRole ||
+        userData.userType === "admin" ||
+        userData.userType === "super_admin" ||
+        (userData.additionalRoles &&
+          userData.additionalRoles.includes("admin")),
+      // Ensure isOfficer is boolean
+      isOfficer: userData.isOfficer || userData.userType === "officer" || false,
+    };
+
+    localStorage.setItem("user", JSON.stringify(normalizedUser));
     localStorage.setItem("token", token);
-    setUser(userData);
+    setUser(normalizedUser);
     setToken(token);
+
+    // Show login success message
+    toast.success(`Welcome back, ${normalizedUser.name}!`, {
+      duration: 2000,
+      position: "top-center",
+    });
   }, []);
 
   const logout = useCallback(() => {
@@ -100,8 +144,30 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const updateUser = useCallback((updatedUserData) => {
-    localStorage.setItem("user", JSON.stringify(updatedUserData));
-    setUser(updatedUserData);
+    const normalizedUser = {
+      ...updatedUserData,
+      userType:
+        updatedUserData.userType ||
+        (updatedUserData.isOfficer ? "officer" : "user"),
+      hasAdminRole:
+        updatedUserData.hasAdminRole ||
+        updatedUserData.userType === "admin" ||
+        updatedUserData.userType === "super_admin" ||
+        (updatedUserData.additionalRoles &&
+          updatedUserData.additionalRoles.includes("admin")),
+      isOfficer:
+        updatedUserData.isOfficer ||
+        updatedUserData.userType === "officer" ||
+        false,
+    };
+
+    localStorage.setItem("user", JSON.stringify(normalizedUser));
+    setUser(normalizedUser);
+
+    toast.success("Profile updated successfully!", {
+      duration: 2000,
+      position: "top-center",
+    });
   }, []);
 
   const getAllUsers = useCallback(async () => {
@@ -117,6 +183,9 @@ export const AuthProvider = ({ children }) => {
 
       if (error.response?.status === 403) {
         toast.error("Admin access required");
+      } else if (error.response?.status === 401) {
+        toast.error("Please login again");
+        logout();
       }
 
       return {
@@ -126,6 +195,41 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Enhanced helper functions for user roles and permissions
+  const checkPermission = useCallback(
+    (requiredRoles, requiredAdmin = false) => {
+      if (!user) return false;
+
+      // Check user type
+      const userRoles = [user.userType];
+
+      // Include additional roles if they exist
+      if (user.additionalRoles && Array.isArray(user.additionalRoles)) {
+        userRoles.push(...user.additionalRoles);
+      }
+
+      // If user is officer with admin role, add admin to roles
+      if (user.isOfficer && user.hasAdminRole) {
+        userRoles.push("admin");
+      }
+
+      // Check if any required role matches user's roles
+      const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+
+      // For admin-specific checks
+      if (requiredAdmin) {
+        const isAdmin =
+          userRoles.includes("admin") ||
+          userRoles.includes("super_admin") ||
+          (user.isOfficer && user.hasAdminRole);
+        return hasRole && isAdmin;
+      }
+
+      return hasRole;
+    },
+    [user]
+  );
+
   const value = {
     user,
     token,
@@ -134,13 +238,61 @@ export const AuthProvider = ({ children }) => {
     updateUser,
     isLoading,
     getAllUsers,
+    checkPermission,
+
+    // Authentication status
     isAuthenticated: !!user && !!token,
-    isAdmin: user?.userType === "admin",
+
+    // User type checks
+    isSuperAdmin: user?.userType === "super_admin",
+    isAdmin:
+      user?.userType === "admin" ||
+      (user?.additionalRoles && user.additionalRoles.includes("admin")) ||
+      (user?.isOfficer && user?.hasAdminRole),
+    isOfficer: user?.userType === "officer" || user?.isOfficer,
+    isRegularUser: user?.userType === "user" && !user?.isOfficer,
+
+    // Status checks
     isActive: user?.status === "active",
     isInactive: user?.status === "inactive",
+
+    // Helper functions
+    getUserType: () => {
+      if (!user) return "unknown";
+      if (user.userType === "officer" || user.isOfficer) return "officer";
+      return user.userType || "user";
+    },
+
     getUserStatus: () => {
       if (!user) return "unknown";
-      return user.status || "unknown";
+      return user.status || "active";
+    },
+
+    // Quick access to common properties
+    getUserName: () => user?.name || "User",
+    getUserEmail: () => user?.email || user?.phone || "No contact info",
+    getUserPhone: () => user?.phone || "No phone",
+
+    // Check if user can access officer features
+    canAccessOfficerFeatures: () => {
+      if (!user) return false;
+      return (
+        user.userType === "officer" ||
+        user.isOfficer ||
+        user.officerId ||
+        (user.additionalRoles && user.additionalRoles.includes("officer"))
+      );
+    },
+
+    // Check if user can access admin features
+    canAccessAdminFeatures: () => {
+      if (!user) return false;
+      return (
+        user.userType === "super_admin" ||
+        user.userType === "admin" ||
+        (user.additionalRoles && user.additionalRoles.includes("admin")) ||
+        (user.isOfficer && user.hasAdminRole)
+      );
     },
   };
 

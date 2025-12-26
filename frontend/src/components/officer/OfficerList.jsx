@@ -18,8 +18,8 @@ import {
   FiChevronUp,
   FiChevronLeft,
   FiChevronRight,
-  FiChevronsLeft,
-  FiChevronsRight,
+  FiShield,
+  FiUser,
 } from "react-icons/fi";
 
 const OfficerList = () => {
@@ -34,6 +34,7 @@ const OfficerList = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [editingOfficerId, setEditingOfficerId] = useState(null);
   const [expandedOfficerId, setExpandedOfficerId] = useState(null);
+  const [updatingAdmin, setUpdatingAdmin] = useState(null);
   const [editFormData, setEditFormData] = useState({
     name: "",
     phone: "",
@@ -50,6 +51,24 @@ const OfficerList = () => {
   const [totalOfficers, setTotalOfficers] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
+  const currentUser = useMemo(() => {
+    try {
+      const userData = localStorage.getItem("user");
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+      return null;
+    }
+  }, []);
+
+  // Extract current user's ID
+  const currentUserId = currentUser?._id;
+  const isCurrentUserAdmin =
+    currentUser?.userType === "admin" ||
+    currentUser?.userType === "super_admin" ||
+    currentUser?.hasAdminRole;
+  const isCurrentUserOfficer =
+    currentUser?.userType === "officer" || currentUser?.isOfficer;
   // Parse comma-separated search terms
   const parseSearchTerms = (searchString) => {
     if (!searchString) return [];
@@ -199,7 +218,36 @@ const OfficerList = () => {
       toast.error("Failed to update officer status");
     }
   };
+  const toggleOfficerAdminRole = async (officerId, isCurrentlyAdmin) => {
+    try {
+      setUpdatingAdmin(officerId);
+      const token = localStorage.getItem("token");
 
+      await axios.put(
+        `${BASE_URL}/officers/${officerId}/admin-role`,
+        { isAlsoAdmin: !isCurrentlyAdmin },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      toast.success(
+        isCurrentlyAdmin
+          ? "Admin role removed from officer"
+          : "Admin role granted to officer"
+      );
+      fetchOfficers(); // Refresh list
+    } catch (error) {
+      console.error("Error updating officer admin role:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to update admin role";
+      toast.error(errorMessage);
+    } finally {
+      setUpdatingAdmin(null);
+    }
+  };
   // Delete officer
   const deleteOfficer = async (officerId) => {
     if (
@@ -516,50 +564,6 @@ const OfficerList = () => {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl shadow border border-gray-300 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Active Officers</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {officers.filter((o) => o.status === "active").length}
-              </p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <FiCheck className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow border border-gray-300 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Inactive Officers</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {officers.filter((o) => o.status === "inactive").length}
-              </p>
-            </div>
-            <div className="p-3 bg-red-100 rounded-lg">
-              <FiX className="h-6 w-6 text-red-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow border border-gray-300 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Departments</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {departments.length}
-              </p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <FiFilter className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-      </div>
       {/* Pagination Controls */}
       {officers.length > 0 && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-6">
@@ -675,6 +679,9 @@ const OfficerList = () => {
                     Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Admin Role
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -765,6 +772,76 @@ const OfficerList = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4">
+                        {/* Check if this officer is the current logged-in user */}
+                        {officer._id === currentUserId ? (
+                          <span
+                            className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium ${
+                              officer.hasAdminRole || officer.isAlsoAdmin
+                                ? "bg-purple-100 text-purple-700 border border-purple-200 cursor-not-allowed opacity-75"
+                                : "bg-gray-100 text-gray-700 border border-gray-300 cursor-not-allowed opacity-75"
+                            }`}
+                            title="You cannot change your own admin role"
+                          >
+                            {officer.hasAdminRole || officer.isAlsoAdmin ? (
+                              <>
+                                <FiShield className="h-3 w-3 mr-1" />
+                                Your Admin Role
+                              </>
+                            ) : (
+                              <>
+                                <FiUser className="h-3 w-3 mr-1" />
+                                Your Role
+                              </>
+                            )}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              toggleOfficerAdminRole(
+                                officer._id,
+                                officer.hasAdminRole || officer.isAlsoAdmin
+                              )
+                            }
+                            disabled={
+                              updatingAdmin === officer._id ||
+                              officer.status === "inactive"
+                            }
+                            className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              officer.hasAdminRole || officer.isAlsoAdmin
+                                ? "bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
+                            } ${
+                              updatingAdmin === officer._id
+                                ? "opacity-50 cursor-not-allowed"
+                                : ""
+                            }
+      ${officer.status === "inactive" ? "opacity-50 cursor-not-allowed" : ""}`}
+                            title={
+                              officer.status === "inactive"
+                                ? "Activate officer first"
+                                : ""
+                            }
+                          >
+                            {updatingAdmin === officer._id ? (
+                              <div className="flex items-center">
+                                <div className="w-4 h-4 border-b-2 border-current rounded-full animate-spin mr-2" />
+                                Updating...
+                              </div>
+                            ) : officer.hasAdminRole || officer.isAlsoAdmin ? (
+                              <>
+                                <FiShield className="h-3 w-3 mr-1" />
+                                Remove Admin
+                              </>
+                            ) : (
+                              <>
+                                <FiUser className="h-3 w-3 mr-1" />
+                                Make Admin
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <div className="flex space-x-2">
                           <button
                             onClick={() => toggleOfficerExpansion(officer._id)}
@@ -784,14 +861,25 @@ const OfficerList = () => {
                           >
                             <FiEdit className="h-4 w-4" />
                           </button>
-                          <button
-                            onClick={() => deleteOfficer(officer._id)}
-                            className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete Officer"
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
-                          {officer.status === "active" ? (
+
+                          {/* Delete button - Don't show for current user */}
+                          {officer._id !== currentUserId && (
+                            <button
+                              onClick={() => deleteOfficer(officer._id)}
+                              className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Officer"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          )}
+
+                          {/* Status activation buttons - Don't show for current user if they're an admin */}
+                          {officer._id === currentUserId &&
+                          (officer.hasAdminRole || officer.isAlsoAdmin) ? (
+                            <span className="px-3 py-1 text-xs text-gray-500 bg-gray-100 rounded-lg cursor-not-allowed">
+                              Your Account
+                            </span>
+                          ) : officer.status === "active" ? (
                             <button
                               onClick={() =>
                                 updateOfficerStatus(officer._id, "inactive")
@@ -817,7 +905,7 @@ const OfficerList = () => {
                     {/* Expanded Edit Form */}
                     {expandedOfficerId === officer._id && (
                       <tr className="bg-blue-50">
-                        <td colSpan="6" className="px-6 py-4">
+                        <td colSpan="7" className="px-6 py-4">
                           <div className="bg-white rounded-lg border border-gray-300 p-4">
                             <div className="flex items-center justify-between mb-4">
                               <h4 className="text-lg font-semibold text-gray-900">

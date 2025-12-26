@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
@@ -125,35 +126,70 @@ const AdminPanel = () => {
     );
   }
 
-  // Filter users: Exclude current user (self) from display
-  const filteredUsers = allUsers.filter((u) => u._id !== user._id);
+  // Filter users: Exclude current user and ALL officers
+  const filteredUsers = allUsers.filter((u) => {
+    // Exclude current user
+    if (u._id === user._id) return false;
 
-  // For super admin: see all users except himself
-  // For regular admin: only see non-admin, non-super_admin users
-  const displayUsers = filteredUsers.filter((u) => {
-    if (user.userType === "super_admin") {
-      return true; // Super admin sees all users except himself
-    }
-    // Regular admin only sees non-admin users
-    return u.userType !== "admin" && u.userType !== "super_admin";
+    // Exclude users with userType "officer"
+    if (u.userType === "officer") return false;
+
+    // Exclude users who are officers (check additionalRoles)
+    if (u.additionalRoles && u.additionalRoles.includes("officer"))
+      return false;
+
+    // Exclude users with officerId (linked to officer)
+    if (u.officerId) return false;
+
+    return true;
   });
 
-  // Calculate statistics (excluding current user)
+  // For super admin: see all non-officer users
+  // For regular admin: see only regular users (no admins/super_admins)
+  const displayUsers = filteredUsers.filter((u) => {
+    if (user.userType === "super_admin") {
+      return true; // Super admin sees all non-officer users
+    }
+    // Regular admin only sees regular users (no admins or super_admins)
+    return u.userType === "user";
+  });
+
+  // Calculate statistics (excluding current user and ALL officers)
   const totalUsers = displayUsers.length;
   const activeUsers = displayUsers.filter((u) => u.status === "active").length;
   const inactiveUsers = displayUsers.filter(
     (u) => u.status === "inactive"
   ).length;
 
-  // Count admins (excluding current super admin)
-  const adminUsers = allUsers.filter(
-    (u) => u.userType === "admin" && u._id !== user._id
-  ).length;
+  // Count admins (excluding current super admin and officers)
+  const adminUsers = allUsers.filter((u) => {
+    // Exclude current user
+    if (u._id === user._id) return false;
 
-  // Count super admins (excluding current user)
-  const superAdminUsers = allUsers.filter(
-    (u) => u.userType === "super_admin" && u._id !== user._id
-  ).length;
+    // Exclude all officers
+    if (u.userType === "officer") return false;
+    if (u.additionalRoles && u.additionalRoles.includes("officer"))
+      return false;
+    if (u.officerId) return false;
+
+    // Only count admins
+    return u.userType === "admin";
+  }).length;
+
+  // Count super admins (excluding current user and officers)
+  const superAdminUsers = allUsers.filter((u) => {
+    // Exclude current user
+    if (u._id === user._id) return false;
+
+    // Exclude all officers
+    if (u.userType === "officer") return false;
+    if (u.additionalRoles && u.additionalRoles.includes("officer"))
+      return false;
+    if (u.officerId) return false;
+
+    // Only count super admins
+    return u.userType === "super_admin";
+  }).length;
 
   const getRoleColor = (userType) => {
     switch (userType) {
@@ -197,8 +233,8 @@ const AdminPanel = () => {
             </h2>
             <p className="text-gray-300">
               {user.userType === "super_admin"
-                ? "Manage all users and administrators"
-                : "Manage user accounts and monitor activities"}
+                ? "Manage all regular users and administrators"
+                : "Manage regular user accounts and monitor activities"}
             </p>
           </div>
         </div>
@@ -220,7 +256,7 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        <div className="bg-linear-to-brrom-white to-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-linear-to-br from-white to-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 font-medium">Active Users</p>
@@ -283,8 +319,8 @@ const AdminPanel = () => {
             <div className="flex items-center gap-3 mt-1">
               <p className="text-sm text-gray-600">
                 {user.userType === "super_admin"
-                  ? "Manage all users including administrators"
-                  : "Manage user accounts"}
+                  ? "Manage all regular users and administrators"
+                  : "Manage regular user accounts"}
               </p>
               <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded">
                 {displayUsers.length} user{displayUsers.length !== 1 ? "s" : ""}
@@ -350,7 +386,7 @@ const AdminPanel = () => {
             <div className="text-left sm:text-right">
               <p className="text-sm text-gray-600">You are viewing</p>
               <p className="font-medium">
-                {displayUsers.length} other user
+                {displayUsers.length} regular user
                 {displayUsers.length !== 1 ? "s" : ""}
               </p>
             </div>
@@ -558,7 +594,7 @@ const AdminPanel = () => {
           {displayUsers.length === 0 ? (
             <div className="text-center py-8">
               <UserGroupIcon className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p className="text-gray-500">No other users found</p>
+              <p className="text-gray-500">No regular users found</p>
             </div>
           ) : (
             displayUsers.map((u) => {
@@ -719,18 +755,23 @@ const AdminPanel = () => {
         </div>
 
         {/* Empty State */}
+        {/* Empty State */}
         {displayUsers.length === 0 && (
           <div className="text-center py-12">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
               <UserGroupIcon className="h-8 w-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No other users
+              No regular users found
             </h3>
             <p className="text-gray-600 max-w-md mx-auto">
               {user.userType === "super_admin"
-                ? "You are the only user in the system. Register new users to see them here."
-                : "No users are currently registered in the system."}
+                ? "You are the only regular user in the system. Register new users to see them here."
+                : "No regular users are currently registered in the system."}
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Note: Officers (including officer-admins) are managed in the
+              Officer List section
             </p>
           </div>
         )}

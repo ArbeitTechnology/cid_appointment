@@ -11,6 +11,7 @@ import {
   EyeSlashIcon,
   KeyIcon,
   EnvelopeIcon,
+  PhoneIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../hooks/useAuth";
 
@@ -31,29 +32,35 @@ const Login = () => {
 
   // Load saved credentials if "Remember Me" was checked
   useEffect(() => {
-    const savedEmail = localStorage.getItem("rememberedEmail");
+    const savedIdentifier = localStorage.getItem("rememberedIdentifier");
     const savedRememberMe = localStorage.getItem("rememberMe") === "true";
 
-    if (savedRememberMe && savedEmail) {
+    if (savedRememberMe && savedIdentifier) {
       setRememberMe(true);
-      setValue("email", savedEmail);
+      setValue("identifier", savedIdentifier);
     }
   }, [setValue]);
 
-  // In onSubmit function, remove activation-related code:
   const onSubmit = async (data) => {
     setIsLoading(true);
     const loadingToast = toast.loading("Signing you in...");
 
     try {
-      const response = await axios.post(`${BASE_URL}/auth/login`, data);
+      // Send identifier (email or phone) instead of just email
+      const response = await axios.post(
+        `http://localhost:5000/api/auth/login`,
+        {
+          identifier: data.identifier,
+          password: data.password,
+        }
+      );
 
-      // Save email if "Remember Me" is checked
+      // Save identifier if "Remember Me" is checked
       if (rememberMe) {
-        localStorage.setItem("rememberedEmail", data.email);
+        localStorage.setItem("rememberedIdentifier", data.identifier);
         localStorage.setItem("rememberMe", "true");
       } else {
-        localStorage.removeItem("rememberedEmail");
+        localStorage.removeItem("rememberedIdentifier");
         localStorage.removeItem("rememberMe");
       }
 
@@ -61,9 +68,6 @@ const Login = () => {
       login(response.data.user, response.data.token);
 
       toast.dismiss(loadingToast);
-      toast.success("Successfully logged in!", {
-        duration: 3000,
-      });
 
       setTimeout(() => {
         navigate("/dashboard");
@@ -156,42 +160,41 @@ const Login = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="identifier"
                 className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider"
               >
-                Email Address
+                Email or Phone Number
               </label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                   <EnvelopeIcon className="h-5 w-5 text-gray-400 transition-colors duration-200" />
                 </div>
                 <input
-                  id="email"
-                  type="email"
-                  {...register("email", {
-                    required: "Email is required",
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: "Invalid email address",
-                    },
+                  id="identifier"
+                  type="text"
+                  {...register("identifier", {
+                    required: "Email or phone number is required",
                   })}
                   className={`w-full pl-12 pr-4 py-3 bg-gray-50/50 border-2 ${
-                    errors.email
+                    errors.identifier
                       ? "border-red-400 focus:border-red-500"
                       : "border-gray-200 focus:border-black"
                   } rounded-xl focus:outline-none focus:ring-0 transition-all duration-300 placeholder-gray-400 text-black`}
-                  placeholder="you@example.com"
+                  placeholder="you@example.com or +1234567890"
                 />
               </div>
-              {errors.email && (
+              {errors.identifier && (
                 <motion.p
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-2 text-sm text-red-500 font-medium"
                 >
-                  {errors.email.message}
+                  {errors.identifier.message}
                 </motion.p>
               )}
+              <p className="mt-1 text-xs text-gray-500">
+                For officers: Use your phone number. For users: Use your email.
+              </p>
             </div>
 
             <div>

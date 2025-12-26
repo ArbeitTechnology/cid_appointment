@@ -11,7 +11,8 @@ router.post("/add", visitorController.addVisitor);
 
 // Get all visitors with search
 router.get("/all", visitorController.getAllVisitors);
-
+// Add this route after other routes
+router.get("/my-visitors", visitorController.getVisitorsByOfficer);
 // Check phone number
 router.get("/check-phone/:phone", visitorController.checkPhoneNumber);
 

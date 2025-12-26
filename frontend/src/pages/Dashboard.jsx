@@ -17,6 +17,7 @@ import AddVisitor from "../components/Visitor/AddVisitor";
 import VisitorList from "../components/Visitor/VisitorList";
 import AdminPanel from "./AdminPanel";
 import Footer from "../components/Dashboard/Footer";
+import OfficerVisitorList from "../components/Visitor/OfficerVisitorList";
 
 const TabContent = React.memo(({ activeTab, user }) => {
   // If user is admin/super admin and on dashboard tab, show AdminPanel instead of DashboardHome
@@ -29,6 +30,8 @@ const TabContent = React.memo(({ activeTab, user }) => {
       return <AddVisitor />;
     case "visitor-list":
       return <VisitorList />;
+    case "officer-visitor-list":
+      return <OfficerVisitorList user={user} />;
     case "add-officer":
       return <AddOfficer />;
     case "officer-list":

@@ -23,52 +23,37 @@ import {
   FiActivity,
   FiChevronUp,
   FiUserCheck,
-  FiEdit,
-  FiTrash2,
   FiPrinter,
+  FiDownload,
 } from "react-icons/fi";
 import { format, parseISO } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { FiDownload } from "react-icons/fi";
-const VisitorList = () => {
+
+const OfficerVisitorList = ({ user }) => {
   const BASE_URL = import.meta.env.VITE_API_URL;
   const [visitors, setVisitors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneFilter, setPhoneFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
-  const [officerNameFilter, setOfficerNameFilter] = useState("");
-  const [officerDepartmentFilter, setOfficerDepartmentFilter] = useState("");
-  const [officerDesignationFilter, setOfficerDesignationFilter] = useState("");
+  const [purposeFilter, setPurposeFilter] = useState("all");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [purposeFilter, setPurposeFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [officerUnitFilter, setOfficerUnitFilter] = useState("");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalVisitors, setTotalVisitors] = useState(0);
 
-  // Parse comma-separated search terms
-  const parseSearchTerms = (searchString) => {
-    if (!searchString) return [];
-    return searchString
-      .split(",")
-      .map((term) => term.trim())
-      .filter((term) => term.length > 0);
-  };
-
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 500); // 500ms delay
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
@@ -80,16 +65,12 @@ const VisitorList = () => {
     debouncedSearchTerm,
     phoneFilter,
     nameFilter,
-    officerNameFilter,
-    officerDepartmentFilter,
-    officerDesignationFilter,
-    officerUnitFilter,
     purposeFilter,
-    statusFilter,
     startTime,
     endTime,
   ]);
-  // Add this function to format date for API
+
+  // Format date for API
   const formatDateTimeForAPI = (dateTimeString) => {
     if (!dateTimeString) return "";
     const date = new Date(dateTimeString);
@@ -99,10 +80,10 @@ const VisitorList = () => {
     const hours = String(date.getHours()).padStart(2, "0");
     const minutes = String(date.getMinutes()).padStart(2, "0");
     const seconds = String(date.getSeconds()).padStart(2, "0");
-
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
   };
-  // Fetch visitors with debounced search
+
+  // Fetch officer's visitors
   const fetchVisitors = useCallback(async () => {
     try {
       setLoading(true);
@@ -113,32 +94,18 @@ const VisitorList = () => {
         limit: itemsPerPage,
       };
 
-      // Always handle search term (multiSearch or regular search)
       if (debouncedSearchTerm) {
-        if (debouncedSearchTerm.includes(",")) {
-          params.multiSearch = debouncedSearchTerm;
-        } else {
-          params.search = debouncedSearchTerm;
-        }
+        params.search = debouncedSearchTerm;
       }
 
-      // ALWAYS apply individual filters (they work independently of search)
       if (phoneFilter) params.phone = phoneFilter;
       if (nameFilter) params.name = nameFilter;
-      if (officerNameFilter) params.officerName = officerNameFilter;
-      if (officerDepartmentFilter)
-        params.officerDepartment = officerDepartmentFilter;
-      if (officerDesignationFilter)
-        params.officerDesignation = officerDesignationFilter;
-      if (officerUnitFilter) params.officerUnit = officerUnitFilter;
       if (purposeFilter && purposeFilter !== "all")
         params.purpose = purposeFilter;
-      if (statusFilter !== "all") params.status = statusFilter;
-
       if (startTime) params.startTime = formatDateTimeForAPI(startTime);
       if (endTime) params.endTime = formatDateTimeForAPI(endTime);
 
-      const response = await axios.get(`${BASE_URL}/visitors/all`, {
+      const response = await axios.get(`${BASE_URL}/visitors/my-visitors`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -153,8 +120,8 @@ const VisitorList = () => {
         setCurrentPage(1);
       }
     } catch (error) {
-      console.error("Error fetching visitors:", error);
-      toast.error("Failed to fetch visitors");
+      console.error("Error fetching officer's visitors:", error);
+      toast.error("Failed to fetch your visitors");
     } finally {
       setLoading(false);
     }
@@ -164,19 +131,14 @@ const VisitorList = () => {
     debouncedSearchTerm,
     phoneFilter,
     nameFilter,
-    officerNameFilter,
-    officerDepartmentFilter,
-    officerDesignationFilter,
-    officerUnitFilter,
     purposeFilter,
-    statusFilter,
     startTime,
     endTime,
   ]);
 
   useEffect(() => {
     fetchVisitors();
-  }, [fetchVisitors, statusFilter]);
+  }, [fetchVisitors]);
 
   // Highlight matched text
   const highlightMatchedText = (text, searchTerms) => {
@@ -185,16 +147,11 @@ const VisitorList = () => {
     }
 
     let highlightedText = text.toString();
-
-    searchTerms.forEach((term) => {
-      if (term.trim()) {
-        const regex = new RegExp(`(${term.trim()})`, "gi");
-        highlightedText = highlightedText.replace(
-          regex,
-          '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
-        );
-      }
-    });
+    const regex = new RegExp(`(${searchTerms.join("|")})`, "gi");
+    highlightedText = highlightedText.replace(
+      regex,
+      '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+    );
 
     return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
   };
@@ -202,47 +159,22 @@ const VisitorList = () => {
   // Get search terms for highlighting
   const searchTerms = useMemo(() => {
     const terms = [];
-
-    // ONLY include comma-separated search terms from the main search box
-    if (searchTerm.includes(",")) {
-      parseSearchTerms(searchTerm).forEach((term) => terms.push(term));
-    } else if (searchTerm) {
-      terms.push(searchTerm);
-    }
-
+    if (searchTerm) terms.push(searchTerm);
     return terms.filter((term) => term && term.trim().length > 0);
-  }, [
-    searchTerm, // ONLY keep searchTerm as dependency
-  ]);
-  // Toggle row expansion
-  const toggleRowExpansion = (visitorId) => {
-    setExpandedRows((prev) => ({
-      ...prev,
-      [visitorId]: !prev[visitorId],
-    }));
-  };
-
-  // Handle search input change
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
+  }, [searchTerm]);
 
   // Clear filters
   const clearFilters = () => {
     setSearchTerm("");
     setPhoneFilter("");
     setNameFilter("");
-    setOfficerNameFilter("");
-    setOfficerDepartmentFilter("");
-    setOfficerDesignationFilter("");
-    setOfficerUnitFilter(""); // NEW
+    setPurposeFilter("all");
     setStartTime("");
     setEndTime("");
-    setPurposeFilter("all");
-    setStatusFilter("all");
     setCurrentPage(1);
   };
-  // PDF Export Function
+
+  // PDF Export Function for officer's visitors
   const exportToPDF = async () => {
     try {
       toast.loading("Generating PDF with photos...", { id: "pdf-export" });
@@ -256,14 +188,7 @@ const VisitorList = () => {
       // Apply current filters
       if (phoneFilter) params.phone = phoneFilter;
       if (nameFilter) params.name = nameFilter;
-      if (officerNameFilter) params.officerName = officerNameFilter;
-      if (officerDepartmentFilter)
-        params.officerDepartment = officerDepartmentFilter;
-      if (officerDesignationFilter)
-        params.officerDesignation = officerDesignationFilter;
-      if (officerUnitFilter) params.officerUnit = officerUnitFilter;
-      if (purposeFilter !== "all") params.purpose = purposeFilter;
-      if (statusFilter !== "all") params.status = statusFilter;
+
       if (debouncedSearchTerm) {
         if (debouncedSearchTerm.includes(","))
           params.multiSearch = debouncedSearchTerm;
@@ -313,14 +238,6 @@ const VisitorList = () => {
       const filterInfo = [];
       if (phoneFilter) filterInfo.push(`Phone: ${phoneFilter}`);
       if (nameFilter) filterInfo.push(`Name: ${nameFilter}`);
-      if (officerNameFilter) filterInfo.push(`Officer: ${officerNameFilter}`);
-      if (officerDesignationFilter)
-        filterInfo.push(`Designation: ${officerDesignationFilter}`);
-      if (officerDepartmentFilter)
-        filterInfo.push(`Department: ${officerDepartmentFilter}`);
-      if (officerUnitFilter) filterInfo.push(`Unit: ${officerUnitFilter}`);
-      if (purposeFilter !== "all") filterInfo.push(`Purpose: ${purposeFilter}`);
-      if (statusFilter !== "all") filterInfo.push(`Status: ${statusFilter}`);
       if (startTime || endTime) filterInfo.push("Time Range Filtered");
 
       doc.text(`Generated on: ${today}`, margin, yPosition);
@@ -666,10 +583,9 @@ const VisitorList = () => {
       });
     }
   };
+
   // Calculate pagination
   const totalPages = Math.ceil(totalVisitors / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalVisitors);
 
   // Generate page numbers for pagination
   const getPageNumbers = () => {
@@ -723,26 +639,29 @@ const VisitorList = () => {
     return Array.from(purposeSet);
   }, [visitors]);
 
-  // Get statistics
-  const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayVisitors = visitors.filter((v) => {
-      const visitDate = new Date(v.visitTime);
-      return visitDate >= today;
-    }).length;
-
-    return {
-      total: totalVisitors,
-      today: todayVisitors,
-      case: visitors.filter((v) => v.purpose === "case").length,
-      personal: visitors.filter((v) => v.purpose === "personal").length,
-    };
-  }, [visitors, totalVisitors]);
-
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-linear-to-r from-blue-600 to-blue-800 rounded-xl p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
+              <FiUser className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">My Visitor List</h2>
+              <p className="text-gray-200">
+                Visitors registered under Officer {user?.name}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-bold text-white">{totalVisitors}</p>
+            <p className="text-sm text-gray-200">Total Visitors</p>
+          </div>
+        </div>
+      </div>
+
       {/* Search and Filters */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -754,9 +673,9 @@ const VisitorList = () => {
               <input
                 type="text"
                 value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                placeholder="Search by name, phone, officer, department, designation... (use commas for multiple)"
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                placeholder="Search by visitor name, phone, or address..."
               />
               {searchTerm && (
                 <button
@@ -774,7 +693,7 @@ const VisitorList = () => {
             <button
               onClick={exportToPDF}
               className="cursor-pointer flex items-center px-4 py-3 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              title="Export filtered data to PDF"
+              title="Export your visitors to PDF"
             >
               <FiDownload className="h-5 w-5 mr-2" />
               Export PDF
@@ -817,7 +736,7 @@ const VisitorList = () => {
                   type="text"
                   value={phoneFilter}
                   onChange={(e) => setPhoneFilter(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
                   placeholder="Filter by phone..."
                 />
               </div>
@@ -830,64 +749,9 @@ const VisitorList = () => {
                   type="text"
                   value={nameFilter}
                   onChange={(e) => setNameFilter(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
                   placeholder="Filter by name..."
                 />
-              </div>
-
-              <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Officer Name
-                  </label>
-                  <input
-                    type="text"
-                    value={officerNameFilter}
-                    onChange={(e) => setOfficerNameFilter(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                    placeholder="Filter by officer name..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Officer Designation
-                  </label>
-                  <input
-                    type="text"
-                    value={officerDesignationFilter}
-                    onChange={(e) =>
-                      setOfficerDesignationFilter(e.target.value)
-                    }
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                    placeholder="Filter by designation..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Officer Department
-                  </label>
-                  <input
-                    type="text"
-                    value={officerDepartmentFilter}
-                    onChange={(e) => setOfficerDepartmentFilter(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                    placeholder="Filter by department..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Officer Unit
-                  </label>
-                  <input
-                    type="text"
-                    value={officerUnitFilter}
-                    onChange={(e) => setOfficerUnitFilter(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                    placeholder="Filter by unit..."
-                  />
-                </div>
               </div>
 
               <div>
@@ -897,7 +761,7 @@ const VisitorList = () => {
                 <select
                   value={purposeFilter}
                   onChange={(e) => setPurposeFilter(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
                 >
                   <option value="all">All Purposes</option>
                   {purposes.map((purpose) => (
@@ -907,20 +771,7 @@ const VisitorList = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Officer Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
-                >
-                  <option value="all">All Status</option>
-                  <option value="active">Active Only</option>
-                  <option value="inactive">Inactive Only</option>
-                </select>
-              </div>
+
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Time Range Filter
@@ -934,7 +785,7 @@ const VisitorList = () => {
                       type="datetime-local"
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
                     />
                   </div>
                   <div>
@@ -945,13 +796,10 @@ const VisitorList = () => {
                       type="datetime-local"
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
                     />
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Filter visitors who visited between the selected time range
-                </p>
               </div>
             </div>
 
@@ -966,6 +814,7 @@ const VisitorList = () => {
           </motion.div>
         )}
       </div>
+
       {/* Pagination Controls */}
       {visitors.length > 0 && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-300 p-4">
@@ -979,7 +828,7 @@ const VisitorList = () => {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="px-3 py-1 border-2 border-gray-300 rounded-lg focus:border-green-600 focus:outline-none focus:ring-0 transition-all duration-300"
+                className="px-3 py-1 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-0 transition-all duration-300"
               >
                 <option value={10}>10</option>
                 <option value={20}>20</option>
@@ -1009,7 +858,7 @@ const VisitorList = () => {
                     disabled={pageNumber === "..."}
                     className={`min-w-10 h-10 flex items-center justify-center rounded-lg border-2 transition-all duration-300 ${
                       pageNumber === currentPage
-                        ? "bg-green-600 text-white border-green-600 font-medium"
+                        ? "bg-blue-600 text-white border-blue-600 font-medium"
                         : pageNumber === "..."
                         ? "border-transparent text-gray-500 cursor-default"
                         : "border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -1032,49 +881,29 @@ const VisitorList = () => {
           </div>
         </div>
       )}
+
       {/* Summary */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="text-sm text-gray-600">
-          Showing {visitors.length} visitors on page {currentPage} of{" "}
-          {totalPages}
-          {searchTerms.length > 0 && (
-            <span className="ml-2 text-yellow-600 font-medium">
-              • {searchTerms.length} search term
-              {searchTerms.length > 1 ? "s" : ""} active
-            </span>
-          )}
-          {startTime && endTime && (
-            <span className="ml-2 text-green-600 font-medium">
-              • Filtered by time range
-            </span>
-          )}
-        </div>
+      <div className="text-sm text-gray-600">
+        Showing {visitors.length} of your visitors on page {currentPage} of{" "}
+        {totalPages}
       </div>
+
       {/* Visitors Table */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex justify-center items-center py-16">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : visitors.length === 0 ? (
           <div className="text-center py-16">
-            <FiSearch className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <FiUser className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               No visitors found
             </h3>
             <p className="text-gray-600 max-w-md mx-auto">
-              {searchTerm ||
-              phoneFilter ||
-              nameFilter ||
-              officerNameFilter ||
-              officerDesignationFilter ||
-              officerDepartmentFilter ||
-              officerUnitFilter ||
-              startTime ||
-              endTime ||
-              purposeFilter !== "all"
+              {searchTerm || phoneFilter || nameFilter || startTime || endTime
                 ? "Try adjusting your filters or search terms"
-                : "No visitors have been registered yet"}
+                : "No visitors have been registered under your name yet"}
             </p>
           </div>
         ) : (
@@ -1087,9 +916,6 @@ const VisitorList = () => {
                   </th>
                   <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
                     Contact Information
-                  </th>
-                  <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
-                    Officer Information
                   </th>
                   <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
                     Visit Details
@@ -1108,7 +934,6 @@ const VisitorList = () => {
                       {/* Column 1: Visitor Details */}
                       <td className="px-8 py-6 align-top">
                         <div className="items-start">
-                          {/* Visitor Image - unchanged */}
                           <div className="flex-shrink-0">
                             {visitor.photo ? (
                               <div className="relative">
@@ -1126,14 +951,8 @@ const VisitorList = () => {
                               </div>
                             )}
                           </div>
-                        </div>
-                      </td>
-
-                      {/* Column 2: Contact Information */}
-                      <td className="px-8 py-6 align-top">
-                        <div className="space-y-6">
-                          <div className="mb-6">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">
+                          <div className="mt-4">
+                            <h3 className="text-xl font-bold text-gray-900">
                               {nameFilter ? (
                                 <span
                                   dangerouslySetInnerHTML={{
@@ -1142,7 +961,7 @@ const VisitorList = () => {
                                         ?.toString()
                                         ?.replace(
                                           new RegExp(`(${nameFilter})`, "gi"),
-                                          '<mark class="bg-yellow-100  rounded">$1</mark>'
+                                          '<mark class="bg-yellow-100 rounded">$1</mark>'
                                         ) || "",
                                   }}
                                 />
@@ -1151,6 +970,12 @@ const VisitorList = () => {
                               )}
                             </h3>
                           </div>
+                        </div>
+                      </td>
+
+                      {/* Column 2: Contact Information */}
+                      <td className="px-8 py-6 align-top">
+                        <div className="space-y-6">
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                               <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
@@ -1165,7 +990,7 @@ const VisitorList = () => {
                                         ?.toString()
                                         ?.replace(
                                           new RegExp(`(${phoneFilter})`, "gi"),
-                                          '<mark class="bg-yellow-100  rounded">$1</mark>'
+                                          '<mark class="bg-yellow-100 rounded">$1</mark>'
                                         ) || "",
                                   }}
                                 />
@@ -1187,7 +1012,13 @@ const VisitorList = () => {
                               )}
                             </p>
                           </div>
-                          <div className="mt-4">
+                        </div>
+                      </td>
+
+                      {/* Column 3: Visit Details */}
+                      <td className="px-8 py-6 align-top">
+                        <div className="space-y-6">
+                          <div>
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                               Purpose of Visit
                             </p>
@@ -1203,7 +1034,7 @@ const VisitorList = () => {
                                             `(${purposeFilter})`,
                                             "gi"
                                           ),
-                                          '<mark class="bg-yellow-100  rounded">$1</mark>'
+                                          '<mark class="bg-yellow-100 rounded">$1</mark>'
                                         ) || "",
                                   }}
                                 />
@@ -1215,163 +1046,39 @@ const VisitorList = () => {
                               )}
                             </span>
                           </div>
-                        </div>
-                      </td>
 
-                      {/* Column 3: Officer Information */}
-                      <td className="px-8 py-6 align-top">
-                        <div className="space-y-6">
                           <div>
-                            <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                              {officerNameFilter ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.officer?.name
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(
-                                            `(${officerNameFilter})`,
-                                            "gi"
-                                          ),
-                                          '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                        ) || "N/A",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(
-                                  visitor.officer?.name,
-                                  searchTerms
-                                )
-                              )}
-                            </h4>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                              Visit Date & Time
+                            </p>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {format(
+                                  parseISO(visitor.visitTime),
+                                  "MMM dd, yyyy"
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {format(
+                                  parseISO(visitor.visitTime),
+                                  "hh:mm:ss a"
+                                )}
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="grid grid-cols-1 gap-4">
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                Designation
-                              </p>
-                              <p className="text-sm font-medium text-gray-900">
-                                {officerDesignationFilter ? (
-                                  <span
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        visitor.officer?.designation
-                                          ?.toString()
-                                          ?.replace(
-                                            new RegExp(
-                                              `(${officerDesignationFilter})`,
-                                              "gi"
-                                            ),
-                                            '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                          ) || "N/A",
-                                    }}
-                                  />
-                                ) : (
-                                  highlightMatchedText(
-                                    visitor.officer?.designation,
-                                    searchTerms
-                                  )
-                                )}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                Department
-                              </p>
-                              <p className="text-sm font-medium text-gray-900">
-                                {officerDepartmentFilter ? (
-                                  <span
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        visitor.officer?.department
-                                          ?.toString()
-                                          ?.replace(
-                                            new RegExp(
-                                              `(${officerDepartmentFilter})`,
-                                              "gi"
-                                            ),
-                                            '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                          ) || "N/A",
-                                    }}
-                                  />
-                                ) : (
-                                  highlightMatchedText(
-                                    visitor.officer?.department,
-                                    searchTerms
-                                  )
-                                )}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                Unit
-                              </p>
-                              <p className="text-sm font-medium text-gray-900">
-                                {officerUnitFilter ? (
-                                  <span
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        visitor.officer?.unit
-                                          ?.toString()
-                                          ?.replace(
-                                            new RegExp(
-                                              `(${officerUnitFilter})`,
-                                              "gi"
-                                            ),
-                                            '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                          ) || "N/A",
-                                    }}
-                                  />
-                                ) : (
-                                  visitor.officer?.unit || "N/A"
-                                )}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                Status
-                              </p>
-                              <span
-                                className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
-                                  visitor.officer?.status === "active"
-                                    ? "bg-green-100 text-green-800 border border-green-200"
-                                    : "bg-red-100 text-red-800 border border-red-200"
-                                }`}
-                              >
-                                <FiActivity className="w-3 h-3 mr-1.5" />
-                                {visitor.officer?.status}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Column 4: Visit Details */}
-                      <td className="px-8 py-6 align-top">
-                        <div className="space-y-6">
-                          {/* Registration Timestamps */}
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                Visit Date & Time
-                              </p>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                              Registered By
+                            </p>
+                            <div className="flex items-center">
+                              <FiUser className="w-4 h-4 text-gray-500 mr-2" />
                               <div>
                                 <p className="text-sm font-medium text-gray-900">
-                                  {format(
-                                    parseISO(visitor.createdAt),
-                                    "MMM dd, yyyy"
-                                  )}
+                                  {user?.name}
                                 </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {format(
-                                    parseISO(visitor.visitTime),
-                                    "hh:mm:ss a"
-                                  )}
+                                <p className="text-xs text-gray-500">
+                                  {user?.designation} • {user?.department}
                                 </p>
                               </div>
                             </div>
@@ -1390,4 +1097,4 @@ const VisitorList = () => {
   );
 };
 
-export default VisitorList;
+export default OfficerVisitorList;

@@ -1,10 +1,25 @@
 const Officer = require("../models/Officer");
+const User = require("../models/User");
 
 // Add new officer
 exports.addOfficer = async (req, res) => {
   try {
-    const { name, phone, designation, department, unit, bpNumber, status } =
-      req.body;
+    const {
+      name,
+      password,
+      phone,
+      designation,
+      department,
+      unit,
+      bpNumber,
+      status = "inactive", // Default to inactive
+      isAlsoAdmin = false,
+    } = req.body;
+
+    console.log("=== ADDING OFFICER ===");
+    console.log("Phone:", phone);
+    console.log("Status:", status);
+    console.log("isAlsoAdmin:", isAlsoAdmin);
 
     // Check if officer with same phone or bpNumber exists
     const existingOfficer = await Officer.findOne({
@@ -17,26 +32,74 @@ exports.addOfficer = async (req, res) => {
       });
     }
 
+    // **FIX: Create officer directly**
     const officer = new Officer({
       name,
+      password, // Will be hashed by pre-save middleware
       phone,
       designation,
       department,
       unit: unit || "",
       bpNumber,
-      status: status || "active",
+      status: status,
+      additionalRoles: isAlsoAdmin ? ["admin"] : [],
+      isAlsoAdmin: isAlsoAdmin,
     });
 
     await officer.save();
 
+    console.log("Officer saved with ID:", officer._id);
+
+    // **OPTIONAL: Only create user account if REALLY needed for admin features**
+    // Most admin features should work with officer's isAlsoAdmin flag
+    if (isAlsoAdmin) {
+      try {
+        const userEmail = `${phone}@officer.system`; // Simple email
+        let user = await User.findOne({ email: userEmail });
+
+        if (!user) {
+          user = new User({
+            name: officer.name,
+            email: userEmail,
+            password: password, // Same password
+            phone: officer.phone,
+            userType: "admin",
+            officerId: officer._id,
+            status: officer.status,
+            additionalRoles: ["officer"],
+          });
+
+          await user.save();
+          console.log("Linked user account created:", user._id);
+        }
+
+        // Link officer to user
+        officer.userId = user._id;
+        officer.isAlsoUser = true;
+        await officer.save();
+      } catch (userError) {
+        console.error("Error creating linked user:", userError);
+        // Don't fail the officer creation if user creation fails
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Officer added successfully",
-      officer,
+      officer: {
+        _id: officer._id,
+        name: officer.name,
+        phone: officer.phone,
+        designation: officer.designation,
+        department: officer.department,
+        status: officer.status,
+        isAlsoAdmin: officer.isAlsoAdmin,
+        hasAdminRole: officer.hasAdminRole(),
+      },
     });
   } catch (error) {
     console.error("Error adding officer:", error);
-    res.status(500).json({ error: "Failed to add officer" });
+    res.status(500).json({ error: "Failed to add officer: " + error.message });
   }
 };
 
@@ -129,7 +192,13 @@ exports.getAllOfficers = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNumber)
-      .select("-__v");
+      .select("-__v -password");
+
+    // Add hasAdminRole to each officer
+    const officersWithRoles = officers.map((officer) => ({
+      ...officer.toObject(),
+      hasAdminRole: officer.hasAdminRole(),
+    }));
 
     res.json({
       success: true,
@@ -138,13 +207,14 @@ exports.getAllOfficers = async (req, res) => {
       pages,
       limit: limitNumber,
       count: officers.length,
-      officers,
+      officers: officersWithRoles,
     });
   } catch (error) {
     console.error("Error fetching officers:", error);
     res.status(500).json({ error: "Failed to fetch officers" });
   }
 };
+
 // Update officer status
 exports.updateOfficerStatus = async (req, res) => {
   try {
@@ -159,16 +229,24 @@ exports.updateOfficerStatus = async (req, res) => {
       officerId,
       { status, updatedAt: Date.now() },
       { new: true, runValidators: true }
-    ).select("-__v");
+    ).select("-__v -password");
 
     if (!officer) {
       return res.status(404).json({ error: "Officer not found" });
     }
 
+    // Also update linked user status if exists
+    if (officer.userId) {
+      await User.findByIdAndUpdate(officer.userId, { status });
+    }
+
     res.json({
       success: true,
       message: "Officer status updated successfully",
-      officer,
+      officer: {
+        ...officer.toObject(),
+        hasAdminRole: officer.hasAdminRole(),
+      },
     });
   } catch (error) {
     console.error("Error updating officer status:", error);
@@ -188,22 +266,24 @@ exports.searchOfficers = async (req, res) => {
       });
     }
 
-    // Remove the status filter to show all officers
     const officers = await Officer.find({
       $or: [
         { name: { $regex: query, $options: "i" } },
         { designation: { $regex: query, $options: "i" } },
         { department: { $regex: query, $options: "i" } },
         { bpNumber: { $regex: query, $options: "i" } },
+        { phone: { $regex: query, $options: "i" } },
       ],
-      // Removed: status: "active"
     })
-      .select("name designation department phone bpNumber status") // Added status
+      .select("name designation department phone bpNumber status isAlsoAdmin")
       .limit(10);
 
     res.json({
       success: true,
-      officers,
+      officers: officers.map((officer) => ({
+        ...officer.toObject(),
+        hasAdminRole: officer.hasAdminRole(),
+      })),
     });
   } catch (error) {
     console.error("Error searching officers:", error);
@@ -216,21 +296,41 @@ exports.getOfficerById = async (req, res) => {
   try {
     const { officerId } = req.params;
 
-    const officer = await Officer.findById(officerId).select("-__v");
+    const officer = await Officer.findById(officerId).select("-__v -password");
 
     if (!officer) {
       return res.status(404).json({ error: "Officer not found" });
     }
 
+    // Get user info if officer is also admin
+    let userInfo = null;
+    if (officer.userId) {
+      const user = await User.findById(officer.userId).select(
+        "userType status lastLogin"
+      );
+      if (user) {
+        userInfo = {
+          userType: user.userType,
+          status: user.status,
+          lastLogin: user.lastLogin,
+        };
+      }
+    }
+
     res.json({
       success: true,
-      officer,
+      officer: {
+        ...officer.toObject(),
+        hasAdminRole: officer.hasAdminRole(),
+        userInfo,
+      },
     });
   } catch (error) {
     console.error("Error fetching officer:", error);
     res.status(500).json({ error: "Failed to fetch officer" });
   }
 };
+
 // Update officer
 exports.updateOfficer = async (req, res) => {
   try {
@@ -280,16 +380,28 @@ exports.updateOfficer = async (req, res) => {
         department,
         unit: unit || "",
         bpNumber,
-        status: status || "active",
+        status: status,
         updatedAt: Date.now(),
       },
       { new: true, runValidators: true }
-    ).select("-__v");
+    ).select("-__v -password");
+
+    // Update linked user if exists
+    if (updatedOfficer.userId) {
+      await User.findByIdAndUpdate(updatedOfficer.userId, {
+        name: updatedOfficer.name,
+        phone: updatedOfficer.phone,
+        status: updatedOfficer.status,
+      });
+    }
 
     res.json({
       success: true,
       message: "Officer updated successfully",
-      officer: updatedOfficer,
+      officer: {
+        ...updatedOfficer.toObject(),
+        hasAdminRole: updatedOfficer.hasAdminRole(),
+      },
     });
   } catch (error) {
     console.error("Error updating officer:", error);
@@ -301,12 +413,34 @@ exports.updateOfficer = async (req, res) => {
 exports.deleteOfficer = async (req, res) => {
   try {
     const { officerId } = req.params;
+    const currentUserId = req.user._id;
 
-    const officer = await Officer.findByIdAndDelete(officerId);
-
+    const officer = await Officer.findById(officerId);
     if (!officer) {
       return res.status(404).json({ error: "Officer not found" });
     }
+
+    // Prevent officers from deleting themselves
+    if (officer._id.toString() === currentUserId.toString()) {
+      return res.status(403).json({
+        error: "You cannot delete your own account",
+      });
+    }
+
+    // Prevent super admin from being deleted
+    const linkedUser = await User.findOne({ officerId: officer._id });
+    if (linkedUser && linkedUser.userType === "super_admin") {
+      return res.status(403).json({
+        error: "Cannot delete super admin officer",
+      });
+    }
+
+    // Delete linked user if exists
+    if (officer.userId) {
+      await User.findByIdAndDelete(officer.userId);
+    }
+
+    await Officer.findByIdAndDelete(officerId);
 
     res.json({
       success: true,
@@ -350,7 +484,10 @@ exports.getOfficersByDesignation = async (req, res) => {
 
     res.json({
       success: true,
-      officers,
+      officers: officers.map((officer) => ({
+        ...officer.toObject(),
+        hasAdminRole: officer.hasAdminRole(),
+      })),
     });
   } catch (error) {
     console.error("Error fetching officers by designation:", error);
@@ -399,5 +536,158 @@ exports.getOfficersByDesignationAndUnit = async (req, res) => {
   } catch (error) {
     console.error("Error fetching officers by designation and unit:", error);
     res.status(500).json({ error: "Failed to fetch officers" });
+  }
+};
+
+// Update officer admin role (grant/remove admin access)
+exports.updateOfficerAdminRole = async (req, res) => {
+  try {
+    const { officerId } = req.params;
+    const { isAlsoAdmin } = req.body;
+
+    if (typeof isAlsoAdmin !== "boolean") {
+      return res.status(400).json({
+        error: "isAlsoAdmin must be a boolean value",
+      });
+    }
+
+    const officer = await Officer.findById(officerId);
+    if (!officer) {
+      return res.status(404).json({ error: "Officer not found" });
+    }
+
+    // If already has the requested admin status, return
+    if (officer.isAlsoAdmin === isAlsoAdmin) {
+      return res.json({
+        success: true,
+        message: `Officer already ${
+          isAlsoAdmin ? "has" : "does not have"
+        } admin role`,
+        officer: {
+          _id: officer._id,
+          name: officer.name,
+          phone: officer.phone,
+          isAlsoAdmin: officer.isAlsoAdmin,
+          hasAdminRole: officer.hasAdminRole(),
+        },
+      });
+    }
+
+    if (isAlsoAdmin) {
+      // Grant admin role
+
+      // Generate email for user account
+      const userEmail = `officer_${officer.phone.replace(
+        /\D/g,
+        ""
+      )}@system.com`;
+
+      // Check if user already exists with this generated email
+      let user = await User.findOne({
+        $or: [{ email: userEmail }, { phone: officer.phone }],
+      });
+
+      if (!user) {
+        // Create new user account with admin role
+        user = new User({
+          name: officer.name,
+          email: userEmail,
+          password: officer.password,
+          phone: officer.phone,
+          userType: "admin",
+          officerId: officer._id,
+          status: officer.status,
+          additionalRoles: ["officer"],
+        });
+
+        await user.save();
+      } else {
+        // Update existing user to admin
+        user.userType = "admin";
+        user.officerId = officer._id;
+        user.additionalRoles = [
+          ...new Set([...user.additionalRoles, "officer"]),
+        ];
+        await user.save();
+      }
+
+      // Update officer
+      officer.additionalRoles = ["admin"];
+      officer.isAlsoAdmin = true;
+      officer.userId = user._id;
+      officer.isAlsoUser = true;
+    } else {
+      // Remove admin role
+
+      // Remove admin from additional roles
+      officer.additionalRoles = officer.additionalRoles.filter(
+        (role) => role !== "admin"
+      );
+      officer.isAlsoAdmin = false;
+
+      // Update linked user account if exists
+      if (officer.userId) {
+        const user = await User.findById(officer.userId);
+        if (user) {
+          // Downgrade user to regular user role
+          user.userType = "user";
+          user.additionalRoles = user.additionalRoles.filter(
+            (role) => role !== "officer"
+          );
+          user.officerId = null;
+          await user.save();
+        }
+
+        // Remove user link
+        officer.userId = null;
+        officer.isAlsoUser = false;
+      }
+    }
+
+    officer.updatedAt = Date.now();
+    await officer.save();
+
+    res.json({
+      success: true,
+      message: isAlsoAdmin
+        ? "Admin role granted to officer successfully"
+        : "Admin role removed from officer successfully",
+      officer: {
+        _id: officer._id,
+        name: officer.name,
+        phone: officer.phone,
+        additionalRoles: officer.additionalRoles,
+        isAlsoAdmin: officer.isAlsoAdmin,
+        hasAdminRole: officer.hasAdminRole(),
+        userId: officer.userId,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating officer admin role:", error);
+    res.status(500).json({ error: "Failed to update officer admin role" });
+  }
+};
+
+// Get officer profile (for officer dashboard)
+exports.getOfficerProfile = async (req, res) => {
+  try {
+    const officerId = req.user.officerId || req.user._id;
+
+    const officer = await Officer.findById(officerId).select("-__v -password");
+
+    if (!officer) {
+      return res.status(404).json({ error: "Officer not found" });
+    }
+
+    res.json({
+      success: true,
+      officer: {
+        ...officer.toObject(),
+        hasAdminRole: officer.hasAdminRole(),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching officer profile:", error);
+    res.status(500).json({ error: "Failed to fetch officer profile" });
   }
 };
