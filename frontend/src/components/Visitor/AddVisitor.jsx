@@ -2002,17 +2002,14 @@ const AddVisitor = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
+                        <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900">
                           Visitor Details
                         </th>
-                        <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
+                        <th className="px-2 py-4 text-left text-sm font-semibold text-gray-900">
                           Contact Information
                         </th>
-                        <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
+                        <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900">
                           Officer Information
-                        </th>
-                        <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
-                          Visit Details
                         </th>
                       </tr>
                     </thead>
@@ -2026,21 +2023,20 @@ const AddVisitor = () => {
                             className="hover:bg-gray-50 transition-colors duration-150"
                           >
                             {/* Column 1: Visitor Details */}
-                            <td className="px-8 py-6 align-top">
-                              <div className="flex items-start space-x-6">
-                                {/* Visitor Image - unchanged */}
-                                <div className="flex-shrink-0">
+                            <td className="px-4 py-4 sm:px-4 md:px-4 align-top">
+                              <div className="flex items-start space-x-4 sm:space-x-6">
+                                <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-60 lg:h-70 xl:w-80 xl:h-70">
                                   {visitor.photo ? (
-                                    <div className="relative">
+                                    <div className="relative w-full h-full">
                                       <img
                                         src={visitor.photo}
                                         alt={visitor.name}
-                                        className="w-full h-80 object-contain rounded-lg"
+                                        className="w-full h-full object-contain rounded-lg"
                                       />
                                     </div>
                                   ) : (
-                                    <div className="w-full h-80 rounded-lg bg-gradient-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
-                                      <span className="text-3xl font-bold text-gray-600">
+                                    <div className="w-full h-full rounded-lg bg-gradient-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
+                                      <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-600">
                                         {visitor.name.charAt(0).toUpperCase()}
                                       </span>
                                     </div>
@@ -2050,10 +2046,10 @@ const AddVisitor = () => {
                             </td>
 
                             {/* Column 2: Contact Information */}
-                            <td className="px-8 py-6 align-top">
-                              <div className="space-y-6">
-                                <div className="mb-6">
-                                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                            <td className="px-2 py-4 sm:px-2 md:px-2 align-top">
+                              <div className="space-y-4 sm:space-y-6">
+                                <div className="mb-4 sm:mb-6">
+                                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 sm:mb-2">
                                     {nameFilter ? (
                                       <span
                                         dangerouslySetInnerHTML={{
@@ -2078,11 +2074,8 @@ const AddVisitor = () => {
                                   </h3>
                                 </div>
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                                    <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
-                                    Phone Number
-                                  </p>
-                                  <p className="text-base text-gray-900 font-medium">
+                                  <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 flex items-center">
+                                    <FiPhone className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 mr-1 sm:mr-2" />
                                     {phoneFilter ? (
                                       <span
                                         dangerouslySetInnerHTML={{
@@ -2108,22 +2101,16 @@ const AddVisitor = () => {
                                 </div>
 
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                                    <FiMapPin className="w-4 h-4 text-gray-500 mr-2" />
-                                    Address
-                                  </p>
-                                  <p className="text-sm text-gray-600 leading-relaxed max-w-xs">
+                                  <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 flex items-center">
+                                    <FiMapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 mr-1 sm:mr-2" />
                                     {highlightMatchedText(
                                       visitor.address,
                                       searchTerms
                                     )}
                                   </p>
                                 </div>
-                                <div className="mt-4">
-                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                    Purpose of Visit
-                                  </p>
-                                  <span className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 capitalize">
+                                <div className="mt-3 sm:mt-4">
+                                  <span className="inline-flex items-center px-3 py-1 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 capitalize">
                                     {purposeFilter !== "all" ? (
                                       <span
                                         dangerouslySetInnerHTML={{
@@ -2135,7 +2122,7 @@ const AddVisitor = () => {
                                                   `(${purposeFilter})`,
                                                   "gi"
                                                 ),
-                                                '<mark class="bg-yellow-100  rounded">$1</mark>'
+                                                '<mark class="bg-yellow-100 rounded">$1</mark>'
                                               ) || "",
                                         }}
                                       />
@@ -2147,14 +2134,33 @@ const AddVisitor = () => {
                                     )}
                                   </span>
                                 </div>
+                                <div className="mt-3 sm:mt-4">
+                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 sm:mb-2">
+                                    Visited At
+                                  </p>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">
+                                      {format(
+                                        parseISO(visitor.createdAt),
+                                        "MMM dd, yyyy"
+                                      )}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">
+                                      {format(
+                                        parseISO(visitor.visitTime),
+                                        "hh:mm:ss a"
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             </td>
 
                             {/* Column 3: Officer Information */}
-                            <td className="px-8 py-6 align-top">
-                              <div className="space-y-6">
+                            <td className="px-4 py-4 sm:px-4 md:px-4 align-top">
+                              <div className="space-y-4 sm:space-y-6">
                                 <div>
-                                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                                     {officerNameFilter ? (
                                       <span
                                         dangerouslySetInnerHTML={{
@@ -2166,7 +2172,7 @@ const AddVisitor = () => {
                                                   `(${officerNameFilter})`,
                                                   "gi"
                                                 ),
-                                                '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
+                                                '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
                                               ) || "N/A",
                                         }}
                                       />
@@ -2179,12 +2185,12 @@ const AddVisitor = () => {
                                   </h4>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4">
+                                <div className="grid grid-cols-1 gap-2 sm:gap-4">
                                   <div>
                                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                                       Designation
                                     </p>
-                                    <p className="text-sm font-medium text-gray-900">
+                                    <p className="text-xs sm:text-sm font-medium text-gray-900">
                                       {officerDesignationFilter ? (
                                         <span
                                           dangerouslySetInnerHTML={{
@@ -2196,7 +2202,7 @@ const AddVisitor = () => {
                                                     `(${officerDesignationFilter})`,
                                                     "gi"
                                                   ),
-                                                  '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
+                                                  '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
                                                 ) || "N/A",
                                           }}
                                         />
@@ -2213,7 +2219,7 @@ const AddVisitor = () => {
                                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                                       Department
                                     </p>
-                                    <p className="text-sm font-medium text-gray-900">
+                                    <p className="text-xs sm:text-sm font-medium text-gray-900">
                                       {officerDepartmentFilter ? (
                                         <span
                                           dangerouslySetInnerHTML={{
@@ -2225,7 +2231,7 @@ const AddVisitor = () => {
                                                     `(${officerDepartmentFilter})`,
                                                     "gi"
                                                   ),
-                                                  '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
+                                                  '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
                                                 ) || "N/A",
                                           }}
                                         />
@@ -2242,7 +2248,7 @@ const AddVisitor = () => {
                                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                                       Unit
                                     </p>
-                                    <p className="text-sm font-medium text-gray-900">
+                                    <p className="text-xs sm:text-sm font-medium text-gray-900">
                                       {officerUnitFilter ? (
                                         <span
                                           dangerouslySetInnerHTML={{
@@ -2254,7 +2260,7 @@ const AddVisitor = () => {
                                                     `(${officerUnitFilter})`,
                                                     "gi"
                                                   ),
-                                                  '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
+                                                  '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
                                                 ) || "N/A",
                                           }}
                                         />
@@ -2265,47 +2271,16 @@ const AddVisitor = () => {
                                   </div>
 
                                   <div>
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                      Status
-                                    </p>
                                     <span
-                                      className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
+                                      className={`inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium ${
                                         visitor.officer?.status === "active"
                                           ? "bg-green-100 text-green-800 border border-green-200"
                                           : "bg-red-100 text-red-800 border border-red-200"
                                       }`}
                                     >
-                                      <FiActivity className="w-3 h-3 mr-1.5" />
+                                      <FiActivity className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1 sm:mr-1.5" />
                                       {visitor.officer?.status}
                                     </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Column 4: Visit Details */}
-                            <td className="px-8 py-6 align-top">
-                              <div className="space-y-6">
-                                {/* Registration Timestamps */}
-                                <div className="space-y-4">
-                                  <div>
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                      Visit Date & Time
-                                    </p>
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-900">
-                                        {format(
-                                          parseISO(visitor.createdAt),
-                                          "MMM dd, yyyy"
-                                        )}
-                                      </p>
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        {format(
-                                          parseISO(visitor.visitTime),
-                                          "hh:mm:ss a"
-                                        )}
-                                      </p>
-                                    </div>
                                   </div>
                                 </div>
                               </div>

@@ -917,9 +917,6 @@ const OfficerVisitorList = ({ user }) => {
                   <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
                     Contact Information
                   </th>
-                  <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
-                    Visit Details
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -979,9 +976,6 @@ const OfficerVisitorList = ({ user }) => {
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                               <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
-                              Phone Number
-                            </p>
-                            <p className="text-base text-gray-900 font-medium">
                               {phoneFilter ? (
                                 <span
                                   dangerouslySetInnerHTML={{
@@ -1003,21 +997,12 @@ const OfficerVisitorList = ({ user }) => {
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                               <FiMapPin className="w-4 h-4 text-gray-500 mr-2" />
-                              Address
-                            </p>
-                            <p className="text-sm text-gray-600 leading-relaxed max-w-xs">
                               {highlightMatchedText(
                                 visitor.address,
                                 searchTerms
                               )}
                             </p>
                           </div>
-                        </div>
-                      </td>
-
-                      {/* Column 3: Visit Details */}
-                      <td className="px-8 py-6 align-top">
-                        <div className="space-y-6">
                           <div>
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                               Visit Date & Time

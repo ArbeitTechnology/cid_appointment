@@ -1091,9 +1091,6 @@ const VisitorList = () => {
                   <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
                     Officer Information
                   </th>
-                  <th className="px-8 py-4 text-left text-sm font-semibold text-gray-900">
-                    Visit Details
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1154,9 +1151,6 @@ const VisitorList = () => {
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                               <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
-                              Phone Number
-                            </p>
-                            <p className="text-base text-gray-900 font-medium">
                               {phoneFilter ? (
                                 <span
                                   dangerouslySetInnerHTML={{
@@ -1178,19 +1172,13 @@ const VisitorList = () => {
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                               <FiMapPin className="w-4 h-4 text-gray-500 mr-2" />
-                              Address
-                            </p>
-                            <p className="text-sm text-gray-600 leading-relaxed max-w-xs">
                               {highlightMatchedText(
                                 visitor.address,
                                 searchTerms
                               )}
                             </p>
                           </div>
-                          <div className="mt-4">
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                              Purpose of Visit
-                            </p>
+                          <div>
                             <span className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 capitalize">
                               {purposeFilter !== "all" ? (
                                 <span
@@ -1214,6 +1202,25 @@ const VisitorList = () => {
                                 )
                               )}
                             </span>
+                          </div>
+                          <div className="mt-4">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                              Visit Date & Time
+                            </p>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {format(
+                                  parseISO(visitor.createdAt),
+                                  "MMM dd, yyyy"
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {format(
+                                  parseISO(visitor.visitTime),
+                                  "hh:mm:ss a"
+                                )}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -1346,34 +1353,6 @@ const VisitorList = () => {
                                 <FiActivity className="w-3 h-3 mr-1.5" />
                                 {visitor.officer?.status}
                               </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Column 4: Visit Details */}
-                      <td className="px-8 py-6 align-top">
-                        <div className="space-y-6">
-                          {/* Registration Timestamps */}
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                                Visit Date & Time
-                              </p>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {format(
-                                    parseISO(visitor.createdAt),
-                                    "MMM dd, yyyy"
-                                  )}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {format(
-                                    parseISO(visitor.visitTime),
-                                    "hh:mm:ss a"
-                                  )}
-                                </p>
-                              </div>
                             </div>
                           </div>
                         </div>
