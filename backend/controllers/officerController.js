@@ -590,12 +590,13 @@ exports.getUniqueUnits = async (req, res) => {
     let query = { status: "active" };
 
     if (designation) {
-      // Escape special regex characters in designation
-      const escapedDesignation = designation.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
-      query.designation = { $regex: `^${escapedDesignation}$`, $options: "i" };
+      // Escape special regex characters in designation using escapeRegex function
+      const escapeRegex = (string) => {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      };
+      const escapedDesignation = escapeRegex(designation);
+      // Use exact match instead of regex if you want exact matches
+      query.designation = designation; // Simple string match instead of regex
     }
 
     const units = await Officer.distinct("unit", query);
@@ -620,16 +621,10 @@ exports.getOfficersByDesignationAndUnit = async (req, res) => {
         .json({ error: "Designation and unit are required" });
     }
 
-    // Escape special regex characters
-    const escapedDesignation = designation.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      "\\$&"
-    );
-    const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
+    // Use exact string matching instead of regex for special characters
     const officers = await Officer.find({
-      designation: { $regex: `^${escapedDesignation}$`, $options: "i" },
-      unit: { $regex: `^${escapedUnit}$`, $options: "i" },
+      designation: designation, // Exact match instead of regex
+      unit: unit, // Exact match instead of regex
       status: "active",
     }).select("name designation department phone bpNumber status");
 

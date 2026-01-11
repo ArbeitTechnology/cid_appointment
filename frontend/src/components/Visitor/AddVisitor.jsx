@@ -318,12 +318,10 @@ const AddVisitor = () => {
     try {
       const token = localStorage.getItem("token");
 
-      // URL encode the designation to handle special characters
-      const encodedDesignation = encodeURIComponent(designation);
-
+      // Don't encodeURIComponent here - send as plain text
       const response = await axios.get(`${BASE_URL}/officers/units`, {
         headers: { Authorization: `Bearer ${token}` },
-        params: { designation: encodedDesignation },
+        params: { designation: designation }, // Send as is
       });
       setUniqueUnits(response.data.units || []);
       setFilteredUnits(response.data.units || []);
@@ -338,17 +336,14 @@ const AddVisitor = () => {
     try {
       const token = localStorage.getItem("token");
 
-      // URL encode both designation and unit
-      const encodedDesignation = encodeURIComponent(designation);
-      const encodedUnit = encodeURIComponent(unit);
-
+      // Send as plain text, not encoded
       const response = await axios.get(
         `${BASE_URL}/officers/by-designation-unit`,
         {
           headers: { Authorization: `Bearer ${token}` },
           params: {
-            designation: encodedDesignation,
-            unit: encodedUnit,
+            designation: designation, // Send as is
+            unit: unit, // Send as is
           },
         }
       );
