@@ -83,27 +83,49 @@ exports.getAllVisitors = async (req, res) => {
 
     let query = {};
 
+    // Helper function to escape regex
+    const escapeRegex = (string) => {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    };
+
     // Phone filter
-    if (phone) query.phone = { $regex: phone, $options: "i" };
+    if (phone) {
+      const escapedPhone = escapeRegex(phone);
+      query.phone = { $regex: escapedPhone, $options: "i" };
+    }
 
     // Name filter
-    if (name) query.name = { $regex: name, $options: "i" };
+    if (name) {
+      const escapedName = escapeRegex(name);
+      query.name = { $regex: escapedName, $options: "i" };
+    }
 
     // Officer filters
-    if (officerName)
-      query["officer.name"] = { $regex: officerName, $options: "i" };
-    if (officerDesignation)
+    if (officerName) {
+      const escapedOfficerName = escapeRegex(officerName);
+      query["officer.name"] = { $regex: escapedOfficerName, $options: "i" };
+    }
+
+    if (officerDesignation) {
+      const escapedOfficerDesignation = escapeRegex(officerDesignation);
       query["officer.designation"] = {
-        $regex: officerDesignation,
+        $regex: escapedOfficerDesignation,
         $options: "i",
       };
-    if (officerDepartment)
+    }
+
+    if (officerDepartment) {
+      const escapedOfficerDepartment = escapeRegex(officerDepartment);
       query["officer.department"] = {
-        $regex: officerDepartment,
+        $regex: escapedOfficerDepartment,
         $options: "i",
       };
-    if (officerUnit)
-      query["officer.unit"] = { $regex: officerUnit, $options: "i" }; // NEW
+    }
+
+    if (officerUnit) {
+      const escapedOfficerUnit = escapeRegex(officerUnit);
+      query["officer.unit"] = { $regex: escapedOfficerUnit, $options: "i" };
+    }
 
     // Purpose filter
     if (purpose && ["case", "personal"].includes(purpose))
@@ -152,10 +174,15 @@ exports.getAllVisitors = async (req, res) => {
         .split(",")
         .map((term) => term.trim())
         .filter((term) => term);
+
       if (searchTerms.length > 0) {
         const orConditions = [];
+
         searchTerms.forEach((term) => {
-          const regex = new RegExp(term, "i");
+          // Escape each search term
+          const escapedTerm = escapeRegex(term);
+          const regex = new RegExp(escapedTerm, "i");
+
           orConditions.push(
             { name: regex },
             { phone: regex },
@@ -164,13 +191,17 @@ exports.getAllVisitors = async (req, res) => {
             { "officer.name": regex },
             { "officer.designation": regex },
             { "officer.department": regex },
-            { "officer.unit": regex } // NEW
+            { "officer.unit": regex }
           );
         });
+
         query.$or = orConditions;
       }
     } else if (search) {
-      const regex = new RegExp(search, "i");
+      // Escape the search term
+      const escapedSearch = escapeRegex(search);
+      const regex = new RegExp(escapedSearch, "i");
+
       query.$or = [
         { name: regex },
         { phone: regex },
@@ -179,7 +210,7 @@ exports.getAllVisitors = async (req, res) => {
         { "officer.name": regex },
         { "officer.designation": regex },
         { "officer.department": regex },
-        { "officer.unit": regex }, // NEW
+        { "officer.unit": regex },
       ];
     }
 
@@ -237,10 +268,14 @@ exports.getAllVisitors = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching visitors:", error);
+
+    // Provide more detailed error
     res.status(500).json({
       success: false,
       error: "Failed to fetch visitors",
       message: error.message,
+      details:
+        "Invalid regex pattern in search. Please check your search terms.",
     });
   }
 };
@@ -264,11 +299,22 @@ exports.getVisitorsByOfficer = async (req, res) => {
       "officer.officerId": officerId,
     };
 
+    // Helper function to escape regex
+    const escapeRegex = (string) => {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    };
+
     // Phone filter
-    if (phone) query.phone = { $regex: phone, $options: "i" };
+    if (phone) {
+      const escapedPhone = escapeRegex(phone);
+      query.phone = { $regex: escapedPhone, $options: "i" };
+    }
 
     // Name filter
-    if (name) query.name = { $regex: name, $options: "i" };
+    if (name) {
+      const escapedName = escapeRegex(name);
+      query.name = { $regex: escapedName, $options: "i" };
+    }
 
     // Purpose filter
     if (purpose && ["case", "personal"].includes(purpose))
@@ -308,7 +354,8 @@ exports.getVisitorsByOfficer = async (req, res) => {
 
     // Search filter
     if (search) {
-      const regex = new RegExp(search, "i");
+      const escapedSearch = escapeRegex(search);
+      const regex = new RegExp(escapedSearch, "i");
       query.$or = [
         { name: regex },
         { phone: regex },

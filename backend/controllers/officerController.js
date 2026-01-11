@@ -134,8 +134,9 @@ exports.getAllOfficers = async (req, res) => {
         const orConditions = [];
 
         searchTerms.forEach((term) => {
-          // Create case-insensitive regex for each term
-          const regex = new RegExp(term, "i");
+          // Escape special regex characters in each term
+          const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(escapedTerm, "i");
 
           orConditions.push(
             { name: regex },
@@ -152,7 +153,9 @@ exports.getAllOfficers = async (req, res) => {
     }
     // Handle single search term (backward compatible)
     else if (search) {
-      const regex = new RegExp(search, "i");
+      // Escape special regex characters in search term
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escapedSearch, "i");
       query.$or = [
         { name: regex },
         { phone: regex },
@@ -172,12 +175,22 @@ exports.getAllOfficers = async (req, res) => {
 
       // Department filter
       if (department) {
-        query.department = { $regex: department, $options: "i" };
+        // Escape special regex characters
+        const escapedDepartment = department.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+        query.department = { $regex: escapedDepartment, $options: "i" };
       }
 
       // Designation filter
       if (designation) {
-        query.designation = { $regex: designation, $options: "i" };
+        // Escape special regex characters
+        const escapedDesignation = designation.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+        query.designation = { $regex: escapedDesignation, $options: "i" };
       }
     }
 
@@ -211,7 +224,13 @@ exports.getAllOfficers = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching officers:", error);
-    res.status(500).json({ error: "Failed to fetch officers" });
+
+    // Provide more detailed error information
+    res.status(500).json({
+      error: "Failed to fetch officers",
+      message: error.message,
+      details: error.toString(),
+    });
   }
 };
 

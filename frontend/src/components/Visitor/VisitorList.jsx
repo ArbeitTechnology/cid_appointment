@@ -179,24 +179,36 @@ const VisitorList = () => {
   }, [fetchVisitors, statusFilter]);
 
   // Highlight matched text
+  const escapeRegExp = (string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  };
+
+  // Highlight matched text
   const highlightMatchedText = (text, searchTerms) => {
     if (!searchTerms || searchTerms.length === 0 || !text) {
       return <span>{text}</span>;
     }
 
-    let highlightedText = text.toString();
+    try {
+      let highlightedText = text.toString();
 
-    searchTerms.forEach((term) => {
-      if (term.trim()) {
-        const regex = new RegExp(`(${term.trim()})`, "gi");
-        highlightedText = highlightedText.replace(
-          regex,
-          '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
-        );
-      }
-    });
+      searchTerms.forEach((term) => {
+        if (term.trim()) {
+          // Escape special regex characters
+          const escapedTerm = escapeRegExp(term.trim());
+          const regex = new RegExp(`(${escapedTerm})`, "gi");
+          highlightedText = highlightedText.replace(
+            regex,
+            '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+          );
+        }
+      });
 
-    return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+      return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+    } catch (error) {
+      console.error("Error highlighting text:", error);
+      return <span>{text}</span>;
+    }
   };
 
   // Get search terms for highlighting

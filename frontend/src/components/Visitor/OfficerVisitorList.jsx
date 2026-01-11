@@ -140,20 +140,35 @@ const OfficerVisitorList = ({ user }) => {
     fetchVisitors();
   }, [fetchVisitors]);
 
+  // Helper function to escape regex special characters
+  const escapeRegExp = (string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  };
+
   // Highlight matched text
   const highlightMatchedText = (text, searchTerms) => {
     if (!searchTerms || searchTerms.length === 0 || !text) {
       return <span>{text}</span>;
     }
 
-    let highlightedText = text.toString();
-    const regex = new RegExp(`(${searchTerms.join("|")})`, "gi");
-    highlightedText = highlightedText.replace(
-      regex,
-      '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
-    );
+    try {
+      let highlightedText = text.toString();
 
-    return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+      // Escape all search terms before joining
+      const escapedTerms = searchTerms.map((term) => escapeRegExp(term.trim()));
+      const regex = new RegExp(`(${escapedTerms.join("|")})`, "gi");
+
+      highlightedText = highlightedText.replace(
+        regex,
+        '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+      );
+
+      return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+    } catch (error) {
+      console.error("Error highlighting text:", error);
+      // Fallback: return text without highlighting
+      return <span>{text}</span>;
+    }
   };
 
   // Get search terms for highlighting

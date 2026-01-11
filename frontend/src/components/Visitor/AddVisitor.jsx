@@ -959,20 +959,35 @@ const AddVisitor = () => {
   };
 
   // Other utility functions (highlight text, pagination, etc.)
+  // Helper function to escape regex special characters
+  const escapeRegExp = (string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  };
+
+  // Highlight matched text
   const highlightMatchedText = (text, searchTerms) => {
-    if (!searchTerms?.length || !text) return <span>{text}</span>;
-    let highlightedText = text.toString();
-    searchTerms.forEach((term) => {
-      if (term.trim()) {
-        const regex = new RegExp(term.trim(), "gi");
-        highlightedText = highlightedText.replace(
-          regex,
-          (match) =>
-            `<mark class="bg-yellow-200 text-gray-900 rounded">${match}</mark>`
-        );
-      }
-    });
-    return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+    if (!searchTerms || searchTerms.length === 0 || !text) {
+      return <span>{text}</span>;
+    }
+
+    try {
+      let highlightedText = text.toString();
+
+      // Escape all search terms before joining
+      const escapedTerms = searchTerms.map((term) => escapeRegExp(term.trim()));
+      const regex = new RegExp(`(${escapedTerms.join("|")})`, "gi");
+
+      highlightedText = highlightedText.replace(
+        regex,
+        '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+      );
+
+      return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+    } catch (error) {
+      console.error("Error highlighting text:", error);
+      // Fallback: return text without highlighting
+      return <span>{text}</span>;
+    }
   };
 
   const searchTerms = useMemo(() => {

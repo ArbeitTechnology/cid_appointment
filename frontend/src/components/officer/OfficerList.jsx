@@ -164,6 +164,8 @@ const OfficerList = () => {
         if (designationFilter) params.designation = designationFilter;
       }
 
+      console.log("Fetching officers with params:", params); // Debug log
+
       const response = await axios.get(`${BASE_URL}/officers/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -176,7 +178,14 @@ const OfficerList = () => {
       setTotalPages(response.data.pages || 1);
     } catch (error) {
       console.error("Error fetching officers:", error);
-      toast.error("Failed to fetch officers");
+      console.error("Error response:", error.response); // Log detailed error
+
+      // Show more specific error message
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        "Failed to fetch officers";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -199,6 +208,7 @@ const OfficerList = () => {
   }, [debouncedSearchTerm, statusFilter, departmentFilter, designationFilter]);
 
   // Highlight matched text
+  // Highlight matched text with regex escaping
   const highlightMatchedText = (text, searchTerms) => {
     if (!searchTerms || searchTerms.length === 0 || !text) {
       return <span>{text}</span>;
@@ -208,17 +218,18 @@ const OfficerList = () => {
 
     searchTerms.forEach((term) => {
       if (term.trim()) {
-        const regex = new RegExp(`(${term.trim()})`, "gi");
+        // Escape special regex characters in the search term
+        const escapedTerm = term.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(`(${escapedTerm})`, "gi");
         highlightedText = highlightedText.replace(
           regex,
-          '<mark class="bg-yellow-200 text-gray-900 px-1 rounded">$1</mark>'
+          '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
         );
       }
     });
 
     return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
   };
-
   // Get search terms for highlighting
   const searchTerms = useMemo(() => {
     const terms = [];
