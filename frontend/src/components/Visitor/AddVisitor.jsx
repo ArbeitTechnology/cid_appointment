@@ -2048,7 +2048,7 @@ const AddVisitor = () => {
                             {/* Column 1: Visitor Details */}
                             <td className="px-4 py-4 sm:px-4 md:px-4 align-top">
                               <div className="flex items-start space-x-4 sm:space-x-6">
-                                <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-60 lg:h-70 xl:w-80 xl:h-70">
+                                <div className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-60 lg:h-70 xl:w-80 xl:h-70">
                                   {visitor.photo ? (
                                     <div className="relative w-full h-full">
                                       <img
@@ -2058,7 +2058,7 @@ const AddVisitor = () => {
                                       />
                                     </div>
                                   ) : (
-                                    <div className="w-full h-full rounded-lg bg-gradient-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
+                                    <div className="w-full h-full rounded-lg bg-linear-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
                                       <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-600">
                                         {visitor.name.charAt(0).toUpperCase()}
                                       </span>

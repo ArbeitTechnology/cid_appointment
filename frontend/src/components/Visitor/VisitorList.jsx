@@ -1118,7 +1118,7 @@ const VisitorList = () => {
                       <td className="px-8 py-6 align-top">
                         <div className="items-start">
                           {/* Visitor Image - unchanged */}
-                          <div className="flex-shrink-0">
+                          <div className="shrink-0">
                             {visitor.photo ? (
                               <div className="relative">
                                 <img
@@ -1128,7 +1128,7 @@ const VisitorList = () => {
                                 />
                               </div>
                             ) : (
-                              <div className="w-100 h-80 rounded-lg bg-gradient-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
+                              <div className="w-100 h-80 rounded-lg bg-linear-to-br from-blue-50 to-green-50 border border-gray-200 flex items-center justify-center">
                                 <span className="text-3xl font-bold text-gray-600">
                                   {visitor.name.charAt(0).toUpperCase()}
                                 </span>
