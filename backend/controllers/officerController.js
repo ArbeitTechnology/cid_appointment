@@ -458,9 +458,15 @@ exports.getUniqueDesignations = async (req, res) => {
     const designations = await Officer.distinct("designation", {
       status: "active",
     });
+
+    // Filter out empty/null values and sort
+    const uniqueDesignations = [...new Set(designations)]
+      .filter((d) => d && d.trim())
+      .sort();
+
     res.json({
       success: true,
-      designations: designations.sort(),
+      designations: uniqueDesignations,
     });
   } catch (error) {
     console.error("Error fetching designations:", error);
@@ -501,13 +507,18 @@ exports.getUniqueUnits = async (req, res) => {
     let query = { status: "active" };
 
     if (designation) {
-      query.designation = { $regex: designation, $options: "i" };
+      // Escape special regex characters in designation
+      const escapedDesignation = designation.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+      query.designation = { $regex: `^${escapedDesignation}$`, $options: "i" };
     }
 
     const units = await Officer.distinct("unit", query);
     res.json({
       success: true,
-      units: units.filter((u) => u).sort(),
+      units: units.filter((u) => u && u.trim()).sort(),
     });
   } catch (error) {
     console.error("Error fetching units:", error);
@@ -526,9 +537,16 @@ exports.getOfficersByDesignationAndUnit = async (req, res) => {
         .json({ error: "Designation and unit are required" });
     }
 
+    // Escape special regex characters
+    const escapedDesignation = designation.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+    const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
     const officers = await Officer.find({
-      designation: { $regex: designation, $options: "i" },
-      unit: { $regex: unit, $options: "i" },
+      designation: { $regex: `^${escapedDesignation}$`, $options: "i" },
+      unit: { $regex: `^${escapedUnit}$`, $options: "i" },
       status: "active",
     }).select("name designation department phone bpNumber status");
 

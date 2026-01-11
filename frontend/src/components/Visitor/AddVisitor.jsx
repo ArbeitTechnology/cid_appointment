@@ -39,7 +39,13 @@ import autoTable from "jspdf-autotable";
 
 const AddVisitor = () => {
   const BASE_URL = import.meta.env.VITE_API_URL;
-
+  const parseSearchTerms = (searchString) => {
+    if (!searchString) return [];
+    return searchString
+      .split(",")
+      .map((term) => term.trim())
+      .filter((term) => term.length > 0);
+  };
   // Form states
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -311,14 +317,19 @@ const AddVisitor = () => {
   const fetchUnitsByDesignation = useCallback(async (designation) => {
     try {
       const token = localStorage.getItem("token");
+
+      // URL encode the designation to handle special characters
+      const encodedDesignation = encodeURIComponent(designation);
+
       const response = await axios.get(`${BASE_URL}/officers/units`, {
         headers: { Authorization: `Bearer ${token}` },
-        params: { designation },
+        params: { designation: encodedDesignation },
       });
       setUniqueUnits(response.data.units || []);
       setFilteredUnits(response.data.units || []);
     } catch (error) {
       console.error("Error fetching units:", error);
+      toast.error("Failed to fetch units");
     }
   }, []);
 
@@ -326,28 +337,39 @@ const AddVisitor = () => {
   const fetchOfficersByUnit = useCallback(async (designation, unit) => {
     try {
       const token = localStorage.getItem("token");
+
+      // URL encode both designation and unit
+      const encodedDesignation = encodeURIComponent(designation);
+      const encodedUnit = encodeURIComponent(unit);
+
       const response = await axios.get(
         `${BASE_URL}/officers/by-designation-unit`,
         {
           headers: { Authorization: `Bearer ${token}` },
-          params: { designation, unit },
+          params: {
+            designation: encodedDesignation,
+            unit: encodedUnit,
+          },
         }
       );
       setOfficersByUnit(response.data.officers || []);
       setFilteredOfficers(response.data.officers || []);
     } catch (error) {
       console.error("Error fetching officers by unit:", error);
+      toast.error("Failed to fetch officers");
     }
   }, []);
 
   // Filter dropdowns
   useEffect(() => {
     if (designationSearch) {
-      setFilteredDesignations(
-        uniqueDesignations.filter((d) =>
-          d.toLowerCase().includes(designationSearch.toLowerCase())
-        )
+      // Escape special regex characters for safe filtering
+      const escapedSearch = designationSearch.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
       );
+      const regex = new RegExp(escapedSearch, "i");
+      setFilteredDesignations(uniqueDesignations.filter((d) => regex.test(d)));
     } else {
       setFilteredDesignations(uniqueDesignations);
     }
@@ -355,11 +377,10 @@ const AddVisitor = () => {
 
   useEffect(() => {
     if (unitSearch) {
-      setFilteredUnits(
-        uniqueUnits.filter((u) =>
-          u.toLowerCase().includes(unitSearch.toLowerCase())
-        )
-      );
+      // Escape special regex characters for safe filtering
+      const escapedSearch = unitSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escapedSearch, "i");
+      setFilteredUnits(uniqueUnits.filter((u) => regex.test(u)));
     } else {
       setFilteredUnits(uniqueUnits);
     }
@@ -367,20 +388,25 @@ const AddVisitor = () => {
 
   useEffect(() => {
     if (officerSearch) {
+      // Escape special regex characters for safe filtering
+      const escapedSearch = officerSearch.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+      const regex = new RegExp(escapedSearch, "i");
+
       setFilteredOfficers(
         officersByUnit.filter(
           (officer) =>
-            officer.name.toLowerCase().includes(officerSearch.toLowerCase()) ||
-            officer.department
-              .toLowerCase()
-              .includes(officerSearch.toLowerCase())
+            regex.test(officer.name) ||
+            regex.test(officer.designation) ||
+            regex.test(officer.department)
         )
       );
     } else {
       setFilteredOfficers(officersByUnit);
     }
   }, [officerSearch, officersByUnit]);
-
   // Event handlers
   const capturePhoto = () => {
     if (webcamRef.current) {
@@ -986,24 +1012,6 @@ const AddVisitor = () => {
         }}
       />
     );
-  };
-  const parseSearchTerms = (searchString) => {
-    if (!searchString) return [];
-    return searchString
-      .split(",")
-      .map((term) => term.trim())
-      .filter((term) => term.length > 0);
-  };
-
-  // Toggle row expansion for specific visitor only (multiple rows can be open)
-  const toggleRowExpansion = (visitorId, e) => {
-    // Stop event propagation to prevent the row click from interfering
-    e?.stopPropagation();
-
-    setExpandedRows((prev) => ({
-      ...prev,
-      [visitorId]: !prev[visitorId],
-    }));
   };
 
   const clearFilters = () => {
