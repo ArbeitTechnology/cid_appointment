@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   FiSettings,
@@ -12,7 +12,6 @@ import {
   FiUser,
   FiHome,
   FiList,
-  FiShield,
   FiBook,
 } from "react-icons/fi";
 import photo from "../../../public/vite.png";
@@ -30,9 +29,73 @@ const Sidebar = ({
   isHovered,
   setIsHovered,
 }) => {
+  // Local state for user data to handle real-time updates
+  const [localUser, setLocalUser] = useState(user);
+
+  // Update localUser when the prop changes
+  useEffect(() => {
+    setLocalUser(user);
+  }, [user]);
+
+  // Listen for user update events from OfficerList
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      console.log("User updated event received:", event.detail);
+      setLocalUser(event.detail);
+    };
+
+    // Add event listener
+    window.addEventListener("userUpdated", handleUserUpdated);
+
+    // Clean up event listener
+    return () => {
+      window.removeEventListener("userUpdated", handleUserUpdated);
+    };
+  }, []);
+
+  // Also listen for storage changes (fallback)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "user") {
+        try {
+          const updatedUser = JSON.parse(e.newValue || "{}");
+          if (updatedUser._id === localUser?._id) {
+            console.log("Storage change detected for user:", updatedUser);
+            setLocalUser(updatedUser);
+          }
+        } catch (error) {
+          console.error("Error parsing user data from storage:", error);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, [localUser?._id]);
+
+  // Function to manually refresh user data from localStorage
+  const refreshUserData = () => {
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser._id === localUser?._id) {
+          setLocalUser(parsedUser);
+          console.log("User data refreshed from localStorage");
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+    }
+  };
+
   const getUserInitials = () => {
-    if (!user?.name) return "U";
-    const names = user.name.split(" ");
+    const currentUser = localUser || user;
+    if (!currentUser?.name) return "U";
+    const names = currentUser.name.split(" ");
     return names
       .map((n) => n[0])
       .join("")
@@ -42,7 +105,8 @@ const Sidebar = ({
 
   // Helper function to determine user permissions
   const getUserPermissions = () => {
-    if (!user)
+    const currentUser = localUser || user;
+    if (!currentUser)
       return {
         canAddOfficer: false,
         canViewOfficerList: false,
@@ -51,17 +115,18 @@ const Sidebar = ({
         canViewAllVisitorList: false,
       };
 
-    const isSuperAdmin = user.userType === "super_admin";
-    const isAdmin = user.userType === "admin";
-    const isOfficer = user.userType === "officer";
-    const isRegularUser = user.userType === "user";
+    const isSuperAdmin = currentUser.userType === "super_admin";
+    const isAdmin = currentUser.userType === "admin";
+    const isOfficer = currentUser.userType === "officer";
+    const isRegularUser = currentUser.userType === "user";
 
     // Officer with admin privileges
     const isOfficerWithAdmin =
       isOfficer &&
-      (user.hasAdminRole ||
-        user.isAlsoAdmin ||
-        (user.additionalRoles && user.additionalRoles.includes("admin")));
+      (currentUser.hasAdminRole ||
+        currentUser.isAlsoAdmin ||
+        (currentUser.additionalRoles &&
+          currentUser.additionalRoles.includes("admin")));
 
     return {
       isSuperAdmin,
@@ -176,39 +241,23 @@ const Sidebar = ({
   const navItems = getNavItems();
 
   const getUserTypeDisplay = () => {
-    if (!user) return "User";
+    const currentUser = localUser || user;
+    if (!currentUser) return "User";
 
-    if (user.userType === "super_admin") return "Super Admin";
-    if (user.userType === "admin") return "Admin";
-    if (user.userType === "officer") {
+    if (currentUser.userType === "super_admin") return "Super Admin";
+    if (currentUser.userType === "admin") return "Admin";
+    if (currentUser.userType === "officer") {
       if (
-        user.hasAdminRole ||
-        user.isAlsoAdmin ||
-        (user.additionalRoles && user.additionalRoles.includes("admin"))
+        currentUser.hasAdminRole ||
+        currentUser.isAlsoAdmin ||
+        (currentUser.additionalRoles &&
+          currentUser.additionalRoles.includes("admin"))
       ) {
         return "Officer (Admin)";
       }
       return "Officer";
     }
     return "User";
-  };
-
-  const getUserRoleIcon = () => {
-    if (!user) return null;
-
-    if (user.userType === "super_admin") {
-      return <FiShield className="w-3 h-3 text-red-500" />;
-    }
-    if (user.userType === "admin") {
-      return <FiShield className="w-3 h-3 text-purple-500" />;
-    }
-    if (user.userType === "officer") {
-      if (user.hasAdminRole || user.isAlsoAdmin) {
-        return <FiShield className="w-3 h-3 text-indigo-500" />;
-      }
-      return <FiShield className="w-3 h-3 text-blue-500" />;
-    }
-    return null;
   };
 
   // Get icon for different visitor list types
@@ -264,12 +313,12 @@ const Sidebar = ({
           <div className="flex items-center space-x-3">
             <div
               className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
-                user?.userType === "super_admin"
+                localUser?.userType === "super_admin"
                   ? "bg-red-100 text-red-700 border-2 border-red-300"
-                  : user?.userType === "admin"
+                  : localUser?.userType === "admin"
                   ? "bg-purple-100 text-purple-700 border-2 border-purple-300"
-                  : user?.userType === "officer"
-                  ? user?.hasAdminRole || user?.isAlsoAdmin
+                  : localUser?.userType === "officer"
+                  ? localUser?.hasAdminRole || localUser?.isAlsoAdmin
                     ? "bg-indigo-100 text-indigo-700 border-2 border-indigo-300"
                     : "bg-blue-100 text-blue-700 border-2 border-blue-300"
                   : "bg-green-100 text-green-700 border-2 border-green-300"
@@ -280,23 +329,22 @@ const Sidebar = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center">
                 <p className="text-sm font-bold text-black truncate">
-                  {user?.name || "User"}
+                  {localUser?.name || "User"}
                 </p>
-                {getUserRoleIcon()}
               </div>
               <p className="text-xs text-gray-600 font-medium truncate mt-0.5">
                 {getUserTypeDisplay()}
               </p>
-              {user?.userType === "officer" && (
+              {localUser?.userType === "officer" && (
                 <div className="flex items-center space-x-1 mt-1">
                   <span className="text-xs text-gray-500">
-                    {user?.department || "Department"}
+                    {localUser?.department || "Department"}
                   </span>
-                  {user?.designation && (
+                  {localUser?.designation && (
                     <>
                       <span className="text-gray-300">•</span>
                       <span className="text-xs text-gray-500">
-                        {user.designation}
+                        {localUser.designation}
                       </span>
                     </>
                   )}
@@ -339,21 +387,6 @@ const Sidebar = ({
                         </span>
                       )}
                     </div>
-                    {item.adminOnly && !isActive && (
-                      <span className="ml-auto">
-                        <FiShield className="w-4 h-4 text-indigo-500" />
-                      </span>
-                    )}
-                    {item.userOnly && !isActive && (
-                      <span className="ml-auto">
-                        <FiUser className="w-4 h-4 text-green-500" />
-                      </span>
-                    )}
-                    {item.officerOnly && !isActive && (
-                      <span className="ml-auto">
-                        <FiShield className="w-4 h-4 text-blue-500" />
-                      </span>
-                    )}
                   </motion.button>
                 </li>
               );
@@ -442,21 +475,6 @@ const Sidebar = ({
                 >
                   <span className="w-5 h-5 flex items-center justify-center relative">
                     {getVisitorListIcon(item)}
-                    {item.adminOnly && !isActive && !sidebarOpen && (
-                      <span className="absolute -top-1 -right-1">
-                        <FiShield className="w-3 h-3 text-indigo-500" />
-                      </span>
-                    )}
-                    {item.userOnly && !isActive && !sidebarOpen && (
-                      <span className="absolute -top-1 -right-1">
-                        <FiUser className="w-3 h-3 text-green-500" />
-                      </span>
-                    )}
-                    {item.officerOnly && !isActive && !sidebarOpen && (
-                      <span className="absolute -top-1 -right-1">
-                        <FiShield className="w-3 h-3 text-blue-500" />
-                      </span>
-                    )}
                   </span>
                   {sidebarOpen && (
                     <motion.div
@@ -468,15 +486,6 @@ const Sidebar = ({
                         <span className="font-medium text-sm md:text-base">
                           {item.name}
                         </span>
-                        {item.adminOnly && !isActive && (
-                          <FiShield className="w-4 h-4 text-gray-500" />
-                        )}
-                        {item.userOnly && !isActive && (
-                          <FiUser className="w-4 h-4 text-green-500" />
-                        )}
-                        {item.officerOnly && !isActive && (
-                          <FiShield className="w-4 h-4 text-blue-500" />
-                        )}
                       </div>
                       {item.description && (
                         <span className="text-xs text-gray-400 mt-0.5">
@@ -497,12 +506,12 @@ const Sidebar = ({
         <motion.div className="flex items-center">
           <div
             className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-              user?.userType === "super_admin"
+              localUser?.userType === "super_admin"
                 ? "bg-red-600 text-white"
-                : user?.userType === "admin"
+                : localUser?.userType === "admin"
                 ? "bg-purple-600 text-white"
-                : user?.userType === "officer"
-                ? user?.hasAdminRole || user?.isAlsoAdmin
+                : localUser?.userType === "officer"
+                ? localUser?.hasAdminRole || localUser?.isAlsoAdmin
                   ? "bg-indigo-600 text-white"
                   : "bg-blue-600 text-white"
                 : "bg-green-600 text-white"
@@ -517,13 +526,13 @@ const Sidebar = ({
               animate={{ opacity: 1, x: 0 }}
               className="flex-1 min-w-0 ml-3"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm font-bold text-black truncate">
-                    {user?.name || "User"}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center min-w-0">
+                  <p className="text-sm font-bold text-black truncate max-w-30">
+                    {localUser?.name || "User"}
                   </p>
-                  {getUserRoleIcon()}
                 </div>
+
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -537,10 +546,10 @@ const Sidebar = ({
               <p className="text-xs text-gray-600 font-medium truncate mt-0.5">
                 {getUserTypeDisplay()}
               </p>
-              {user?.userType === "officer" && user?.department && (
+              {localUser?.userType === "officer" && localUser?.department && (
                 <p className="text-xs text-gray-500 truncate mt-0.5">
-                  {user.department}
-                  {user.designation && ` • ${user.designation}`}
+                  {localUser.department}
+                  {localUser.designation && ` • ${localUser.designation}`}
                 </p>
               )}
             </motion.div>

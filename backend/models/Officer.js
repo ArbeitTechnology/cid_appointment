@@ -31,6 +31,7 @@ const officerSchema = new mongoose.Schema({
   unit: {
     type: String,
     trim: true,
+    required: true,
     default: "",
   },
   bpNumber: {

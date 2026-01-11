@@ -53,7 +53,7 @@ const AddOfficer = () => {
         password: data.password,
         designation: data.designation,
         department: data.department,
-        unit: data.unit || "", // Optional field
+        unit: data.unit, // Now required field
         bpNumber: data.bpNumber,
         status: data.status,
         isAdmin: data.isAlsoAdmin, // Note: backend expects "isAdmin" not "isAlsoAdmin"
@@ -354,20 +354,31 @@ const AddOfficer = () => {
               )}
             </div>
 
-            {/* Unit */}
+            {/* Unit - Now Required */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">
                 <span className="flex items-center">
                   <FiGrid className="w-4 h-4 mr-2 text-gray-600" />
-                  Unit (Optional)
+                  Unit *
                 </span>
               </label>
               <input
                 type="text"
-                {...register("unit")}
-                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-blue-600 transition-all duration-300"
+                {...register("unit", {
+                  required: "Unit is required",
+                })}
+                className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 ${
+                  errors.unit
+                    ? "border-red-500 focus:border-red-600"
+                    : "border-gray-300 focus:border-blue-600"
+                }`}
                 placeholder="Development Unit"
               />
+              {errors.unit && (
+                <p className="mt-2 text-sm text-red-600">
+                  {errors.unit.message}
+                </p>
+              )}
             </div>
 
             {/* BP Number */}

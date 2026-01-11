@@ -39,7 +39,7 @@ exports.addOfficer = async (req, res) => {
       phone,
       designation,
       department,
-      unit: unit || "",
+      unit: unit,
       bpNumber,
       status: status,
       additionalRoles: isAlsoAdmin ? ["admin"] : [],
@@ -335,8 +335,18 @@ exports.getOfficerById = async (req, res) => {
 exports.updateOfficer = async (req, res) => {
   try {
     const { officerId } = req.params;
-    const { name, phone, designation, department, unit, bpNumber, status } =
-      req.body;
+
+    // Include password in destructuring
+    const {
+      name,
+      phone,
+      designation,
+      department,
+      unit,
+      bpNumber,
+      status,
+      password,
+    } = req.body;
 
     // Check if officer exists
     const existingOfficer = await Officer.findById(officerId);
@@ -370,29 +380,71 @@ exports.updateOfficer = async (req, res) => {
       }
     }
 
-    // Update officer
-    const updatedOfficer = await Officer.findByIdAndUpdate(
-      officerId,
-      {
-        name,
-        phone,
-        designation,
-        department,
-        unit: unit || "",
-        bpNumber,
-        status: status,
-        updatedAt: Date.now(),
-      },
-      { new: true, runValidators: true }
-    ).select("-__v -password");
+    // Update officer - handle password separately
+    let updatedOfficer;
+
+    if (password && password.trim() !== "") {
+      // If password is provided, find the officer first to use the pre-save hook
+      updatedOfficer = await Officer.findById(officerId);
+
+      if (!updatedOfficer) {
+        return res.status(404).json({ error: "Officer not found" });
+      }
+
+      // Update all fields including password
+      updatedOfficer.name = name;
+      updatedOfficer.phone = phone;
+      updatedOfficer.designation = designation;
+      updatedOfficer.department = department;
+      updatedOfficer.unit = unit;
+      updatedOfficer.bpNumber = bpNumber;
+      updatedOfficer.status = status;
+      updatedOfficer.password = password; // This will trigger pre-save hook to hash it
+      updatedOfficer.updatedAt = Date.now();
+
+      await updatedOfficer.save();
+
+      // Get the officer without password for response
+      updatedOfficer = await Officer.findById(officerId).select(
+        "-__v -password"
+      );
+    } else {
+      // If no password change, use findByIdAndUpdate
+      updatedOfficer = await Officer.findByIdAndUpdate(
+        officerId,
+        {
+          name,
+          phone,
+          designation,
+          department,
+          unit: unit,
+          bpNumber,
+          status,
+          updatedAt: Date.now(),
+        },
+        { new: true, runValidators: true }
+      ).select("-__v -password");
+    }
 
     // Update linked user if exists
     if (updatedOfficer.userId) {
-      await User.findByIdAndUpdate(updatedOfficer.userId, {
+      const userUpdateData = {
         name: updatedOfficer.name,
         phone: updatedOfficer.phone,
         status: updatedOfficer.status,
-      });
+      };
+
+      // Also update user password if provided - need to use findById + save
+      if (password && password.trim() !== "") {
+        const linkedUser = await User.findById(updatedOfficer.userId);
+        if (linkedUser) {
+          linkedUser.password = password; // Will be hashed by User model's pre-save middleware
+          await linkedUser.save();
+        }
+      } else {
+        // Only update other fields without password
+        await User.findByIdAndUpdate(updatedOfficer.userId, userUpdateData);
+      }
     }
 
     res.json({
@@ -405,7 +457,19 @@ exports.updateOfficer = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating officer:", error);
-    res.status(500).json({ error: "Failed to update officer" });
+
+    // Provide more specific error messages
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        error: "Validation error",
+        details: Object.values(error.errors).map((err) => err.message),
+      });
+    }
+
+    res.status(500).json({
+      error: "Failed to update officer",
+      message: error.message,
+    });
   }
 };
 

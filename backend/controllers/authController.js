@@ -343,24 +343,61 @@ exports.updateUserProfile = async (req, res) => {
 };
 
 // Change password
+// Change password - SUPPORTS BOTH USERS AND OFFICERS
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const user = req.user;
 
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current and new password required" });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    // **FIX: Handle both User and Officer models**
+    let isPasswordValid = false;
+    
+    if (user.userType === "officer") {
+      // Officer: Fetch from Officer collection
+      const Officer = require("../models/Officer");
+      const officer = await Officer.findById(user._id).select("+password");
+      
+      if (!officer) {
+        return res.status(404).json({ error: "Officer account not found" });
+      }
+      
+      isPasswordValid = await officer.comparePassword(currentPassword);
+      
+      if (isPasswordValid) {
+        // Update officer password
+        officer.password = newPassword;
+        await officer.save();
+      }
+    } else {
+      // Regular User: Use User model
+      isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      
+      if (isPasswordValid) {
+        // Update user password (pre-save middleware will hash it)
+        user.password = newPassword;
+        await user.save();
+      }
+    }
+
+    if (!isPasswordValid) {
       return res.status(401).json({ error: "Current password is incorrect" });
     }
 
-    user.password = newPassword;
-    await user.save();
-
     res.json({ message: "Password changed successfully" });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error("Change password error:", error);
+    res.status(400).json({ error: "Password change failed" });
   }
 };
+
 
 // Forgot password - only for regular users (not officers)
 exports.forgotPassword = async (req, res) => {
