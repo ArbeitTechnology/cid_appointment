@@ -193,7 +193,7 @@ const AddVisitor = () => {
         params.officerDepartment = officerDepartmentFilter;
       if (officerDesignationFilter)
         params.officerDesignation = officerDesignationFilter;
-      if (officerUnitFilter) params.officerUnit = officerUnitFilter; // NEW
+      if (officerUnitFilter) params.officerUnit = officerUnitFilter;
       if (purposeFilter !== "all") params.purpose = purposeFilter;
       if (statusFilter !== "all") params.status = statusFilter;
       if (debouncedSearchTerm) {
@@ -203,8 +203,23 @@ const AddVisitor = () => {
           params.search = debouncedSearchTerm;
         }
       }
-      if (startTime) params.startTime = startTime;
-      if (endTime) params.endTime = endTime;
+
+      // FIX: Properly format time for backend
+      if (startTime) {
+        // Convert datetime-local to ISO string
+        const startDate = new Date(startTime);
+        // Make sure it's in UTC format for backend
+        params.startTime = startDate.toISOString();
+      }
+
+      if (endTime) {
+        // Convert datetime-local to ISO string
+        const endDate = new Date(endTime);
+        // Make sure it's in UTC format for backend
+        params.endTime = endDate.toISOString();
+      }
+
+      console.log("Fetching visitors with params:", params); // Debug log
 
       const response = await axios.get(`${BASE_URL}/visitors/all`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -228,13 +243,12 @@ const AddVisitor = () => {
     officerNameFilter,
     officerDepartmentFilter,
     officerDesignationFilter,
-    officerUnitFilter, // NEW
+    officerUnitFilter,
     purposeFilter,
     statusFilter,
-    startTime,
-    endTime,
+    startTime, // Add this to dependencies
+    endTime, // Add this to dependencies
   ]);
-
   // Initialize camera
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -555,9 +569,16 @@ const AddVisitor = () => {
           params.multiSearch = debouncedSearchTerm;
         else params.search = debouncedSearchTerm;
       }
-      if (startTime) params.startTime = startTime;
-      if (endTime) params.endTime = endTime;
+      // FIX: Use same time format as fetchVisitors
+      if (startTime) {
+        const startDate = new Date(startTime);
+        params.startTime = startDate.toISOString();
+      }
 
+      if (endTime) {
+        const endDate = new Date(endTime);
+        params.endTime = endDate.toISOString();
+      }
       const response = await axios.get(`${BASE_URL}/visitors/all`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
@@ -2076,7 +2097,9 @@ const AddVisitor = () => {
                                               ?.toString()
                                               ?.replace(
                                                 new RegExp(
-                                                  `(${nameFilter})`,
+                                                  `(${escapeRegExp(
+                                                    nameFilter
+                                                  )})`,
                                                   "gi"
                                                 ),
                                                 '<mark class="bg-yellow-100 rounded">$1</mark>'
@@ -2102,7 +2125,9 @@ const AddVisitor = () => {
                                               ?.toString()
                                               ?.replace(
                                                 new RegExp(
-                                                  `(${phoneFilter})`,
+                                                  `(${escapeRegExp(
+                                                    phoneFilter
+                                                  )})`,
                                                   "gi"
                                                 ),
                                                 '<mark class="bg-yellow-100 rounded">$1</mark>'
@@ -2187,7 +2212,9 @@ const AddVisitor = () => {
                                               ?.toString()
                                               ?.replace(
                                                 new RegExp(
-                                                  `(${officerNameFilter})`,
+                                                  `(${escapeRegExp(
+                                                    officerNameFilter
+                                                  )})`,
                                                   "gi"
                                                 ),
                                                 '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
@@ -2217,7 +2244,9 @@ const AddVisitor = () => {
                                                 ?.toString()
                                                 ?.replace(
                                                   new RegExp(
-                                                    `(${officerDesignationFilter})`,
+                                                    `(${escapeRegExp(
+                                                      officerDesignationFilter
+                                                    )})`,
                                                     "gi"
                                                   ),
                                                   '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
@@ -2246,7 +2275,9 @@ const AddVisitor = () => {
                                                 ?.toString()
                                                 ?.replace(
                                                   new RegExp(
-                                                    `(${officerDepartmentFilter})`,
+                                                    `(${escapeRegExp(
+                                                      officerDepartmentFilter
+                                                    )})`,
                                                     "gi"
                                                   ),
                                                   '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'
@@ -2275,7 +2306,9 @@ const AddVisitor = () => {
                                                 ?.toString()
                                                 ?.replace(
                                                   new RegExp(
-                                                    `(${officerUnitFilter})`,
+                                                    `(${escapeRegExp(
+                                                      officerUnitFilter
+                                                    )})`,
                                                     "gi"
                                                   ),
                                                   '<mark class="bg-yellow-100 text-gray-900 rounded">$1</mark>'

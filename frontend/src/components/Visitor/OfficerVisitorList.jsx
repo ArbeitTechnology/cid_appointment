@@ -70,19 +70,6 @@ const OfficerVisitorList = ({ user }) => {
     endTime,
   ]);
 
-  // Format date for API
-  const formatDateTimeForAPI = (dateTimeString) => {
-    if (!dateTimeString) return "";
-    const date = new Date(dateTimeString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const seconds = String(date.getSeconds()).padStart(2, "0");
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-  };
-
   // Fetch officer's visitors
   const fetchVisitors = useCallback(async () => {
     try {
@@ -102,8 +89,19 @@ const OfficerVisitorList = ({ user }) => {
       if (nameFilter) params.name = nameFilter;
       if (purposeFilter && purposeFilter !== "all")
         params.purpose = purposeFilter;
-      if (startTime) params.startTime = formatDateTimeForAPI(startTime);
-      if (endTime) params.endTime = formatDateTimeForAPI(endTime);
+
+      // FIX: Use toISOString() instead of custom format
+      if (startTime) {
+        const startDate = new Date(startTime);
+        params.startTime = startDate.toISOString();
+      }
+
+      if (endTime) {
+        const endDate = new Date(endTime);
+        params.endTime = endDate.toISOString();
+      }
+
+      console.log("Fetching visitors with params:", params); // Debug log
 
       const response = await axios.get(`${BASE_URL}/visitors/my-visitors`, {
         headers: {
@@ -209,9 +207,16 @@ const OfficerVisitorList = ({ user }) => {
           params.multiSearch = debouncedSearchTerm;
         else params.search = debouncedSearchTerm;
       }
-      if (startTime) params.startTime = startTime;
-      if (endTime) params.endTime = endTime;
+      // FIX: Use same time format as fetchVisitors
+      if (startTime) {
+        const startDate = new Date(startTime);
+        params.startTime = startDate.toISOString();
+      }
 
+      if (endTime) {
+        const endDate = new Date(endTime);
+        params.endTime = endDate.toISOString();
+      }
       const response = await axios.get(`${BASE_URL}/visitors/my-visitors`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
@@ -978,7 +983,10 @@ const OfficerVisitorList = ({ user }) => {
                                       visitor.name
                                         ?.toString()
                                         ?.replace(
-                                          new RegExp(`(${nameFilter})`, "gi"),
+                                          new RegExp(
+                                            `(${escapeRegExp(nameFilter)})`,
+                                            "gi"
+                                          ),
                                           '<mark class="bg-yellow-100 rounded">$1</mark>'
                                         ) || "",
                                   }}
@@ -998,7 +1006,10 @@ const OfficerVisitorList = ({ user }) => {
                                       visitor.phone
                                         ?.toString()
                                         ?.replace(
-                                          new RegExp(`(${phoneFilter})`, "gi"),
+                                          new RegExp(
+                                            `(${escapeRegExp(phoneFilter)})`,
+                                            "gi"
+                                          ),
                                           '<mark class="bg-yellow-100 rounded">$1</mark>'
                                         ) || "",
                                   }}

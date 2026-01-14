@@ -630,18 +630,12 @@ const OfficerList = () => {
               </div>
             </div>
 
-            <div className="flex justify-between">
+            <div className="flex justify-end">
               <button
                 onClick={clearFilters}
                 className="px-4 py-2 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Clear All Filters
-              </button>
-              <button
-                onClick={fetchOfficers}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Apply Filters
               </button>
             </div>
           </motion.div>

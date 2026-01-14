@@ -90,18 +90,7 @@ const VisitorList = () => {
     endTime,
   ]);
   // Add this function to format date for API
-  const formatDateTimeForAPI = (dateTimeString) => {
-    if (!dateTimeString) return "";
-    const date = new Date(dateTimeString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const seconds = String(date.getSeconds()).padStart(2, "0");
 
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-  };
   // Fetch visitors with debounced search
   const fetchVisitors = useCallback(async () => {
     try {
@@ -135,9 +124,15 @@ const VisitorList = () => {
         params.purpose = purposeFilter;
       if (statusFilter !== "all") params.status = statusFilter;
 
-      if (startTime) params.startTime = formatDateTimeForAPI(startTime);
-      if (endTime) params.endTime = formatDateTimeForAPI(endTime);
+      if (startTime) {
+        const startDate = new Date(startTime);
+        params.startTime = startDate.toISOString();
+      }
 
+      if (endTime) {
+        const endDate = new Date(endTime);
+        params.endTime = endDate.toISOString();
+      }
       const response = await axios.get(`${BASE_URL}/visitors/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -184,17 +179,38 @@ const VisitorList = () => {
   };
 
   // Highlight matched text
-  const highlightMatchedText = (text, searchTerms) => {
-    if (!searchTerms || searchTerms.length === 0 || !text) {
-      return <span>{text}</span>;
+  const highlightMatchedText = (text, searchTerms, specificFilter = null) => {
+    if (!text) return <span>{text}</span>;
+
+    const textStr = text.toString();
+
+    // First check for specific filter highlighting
+    if (specificFilter && specificFilter.trim()) {
+      const escapedFilter = escapeRegExp(specificFilter.trim());
+      const filterRegex = new RegExp(`(${escapedFilter})`, "gi");
+      if (filterRegex.test(textStr)) {
+        return (
+          <span
+            dangerouslySetInnerHTML={{
+              __html: textStr.replace(
+                filterRegex,
+                '<mark class="bg-yellow-200 text-gray-900 rounded">$1</mark>'
+              ),
+            }}
+          />
+        );
+      }
+    }
+
+    // Then check for general search terms
+    if (!searchTerms || searchTerms.length === 0) {
+      return <span>{textStr}</span>;
     }
 
     try {
-      let highlightedText = text.toString();
-
+      let highlightedText = textStr;
       searchTerms.forEach((term) => {
         if (term.trim()) {
-          // Escape special regex characters
           const escapedTerm = escapeRegExp(term.trim());
           const regex = new RegExp(`(${escapedTerm})`, "gi");
           highlightedText = highlightedText.replace(
@@ -207,7 +223,7 @@ const VisitorList = () => {
       return <span dangerouslySetInnerHTML={{ __html: highlightedText }} />;
     } catch (error) {
       console.error("Error highlighting text:", error);
-      return <span>{text}</span>;
+      return <span>{textStr}</span>;
     }
   };
 
@@ -281,8 +297,16 @@ const VisitorList = () => {
           params.multiSearch = debouncedSearchTerm;
         else params.search = debouncedSearchTerm;
       }
-      if (startTime) params.startTime = startTime;
-      if (endTime) params.endTime = endTime;
+      // FIX: Use same time format as fetchVisitors
+      if (startTime) {
+        const startDate = new Date(startTime);
+        params.startTime = startDate.toISOString();
+      }
+
+      if (endTime) {
+        const endDate = new Date(endTime);
+        params.endTime = endDate.toISOString();
+      }
 
       const response = await axios.get(`${BASE_URL}/visitors/all`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1143,43 +1167,21 @@ const VisitorList = () => {
                         <div className="space-y-6">
                           <div className="mb-6">
                             <h3 className="text-xl font-bold text-gray-900 mb-2">
-                              {nameFilter ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.name
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(`(${nameFilter})`, "gi"),
-                                          '<mark class="bg-yellow-100  rounded">$1</mark>'
-                                        ) || "",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(visitor.name, searchTerms)
+                              {highlightMatchedText(
+                                visitor.name,
+                                searchTerms,
+                                nameFilter
                               )}
                             </h3>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                              <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
-                              {phoneFilter ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.phone
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(`(${phoneFilter})`, "gi"),
-                                          '<mark class="bg-yellow-100  rounded">$1</mark>'
-                                        ) || "",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(visitor.phone, searchTerms)
-                              )}
-                            </p>
-                          </div>
+                          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                            <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
+                            {highlightMatchedText(
+                              visitor.phone,
+                              searchTerms,
+                              phoneFilter
+                            )}
+                          </p>
 
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-3 flex items-center">
@@ -1192,26 +1194,10 @@ const VisitorList = () => {
                           </div>
                           <div>
                             <span className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 capitalize">
-                              {purposeFilter !== "all" ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.purpose
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(
-                                            `(${purposeFilter})`,
-                                            "gi"
-                                          ),
-                                          '<mark class="bg-yellow-100  rounded">$1</mark>'
-                                        ) || "",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(
-                                  visitor.purpose,
-                                  searchTerms
-                                )
+                              {highlightMatchedText(
+                                visitor.purpose,
+                                searchTerms,
+                                purposeFilter !== "all" ? purposeFilter : null
                               )}
                             </span>
                           </div>
@@ -1242,26 +1228,10 @@ const VisitorList = () => {
                         <div className="space-y-6">
                           <div>
                             <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                              {officerNameFilter ? (
-                                <span
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      visitor.officer?.name
-                                        ?.toString()
-                                        ?.replace(
-                                          new RegExp(
-                                            `(${officerNameFilter})`,
-                                            "gi"
-                                          ),
-                                          '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                        ) || "N/A",
-                                  }}
-                                />
-                              ) : (
-                                highlightMatchedText(
-                                  visitor.officer?.name,
-                                  searchTerms
-                                )
+                              {highlightMatchedText(
+                                visitor.officer?.name,
+                                searchTerms,
+                                officerNameFilter
                               )}
                             </h4>
                           </div>
@@ -1272,26 +1242,10 @@ const VisitorList = () => {
                                 Designation
                               </p>
                               <p className="text-sm font-medium text-gray-900">
-                                {officerDesignationFilter ? (
-                                  <span
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        visitor.officer?.designation
-                                          ?.toString()
-                                          ?.replace(
-                                            new RegExp(
-                                              `(${officerDesignationFilter})`,
-                                              "gi"
-                                            ),
-                                            '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                          ) || "N/A",
-                                    }}
-                                  />
-                                ) : (
-                                  highlightMatchedText(
-                                    visitor.officer?.designation,
-                                    searchTerms
-                                  )
+                                {highlightMatchedText(
+                                  visitor.officer?.designation,
+                                  searchTerms,
+                                  officerDesignationFilter
                                 )}
                               </p>
                             </div>
@@ -1301,26 +1255,10 @@ const VisitorList = () => {
                                 Department
                               </p>
                               <p className="text-sm font-medium text-gray-900">
-                                {officerDepartmentFilter ? (
-                                  <span
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        visitor.officer?.department
-                                          ?.toString()
-                                          ?.replace(
-                                            new RegExp(
-                                              `(${officerDepartmentFilter})`,
-                                              "gi"
-                                            ),
-                                            '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                          ) || "N/A",
-                                    }}
-                                  />
-                                ) : (
-                                  highlightMatchedText(
-                                    visitor.officer?.department,
-                                    searchTerms
-                                  )
+                                {highlightMatchedText(
+                                  visitor.officer?.department,
+                                  searchTerms,
+                                  officerDepartmentFilter
                                 )}
                               </p>
                             </div>
@@ -1330,23 +1268,10 @@ const VisitorList = () => {
                                 Unit
                               </p>
                               <p className="text-sm font-medium text-gray-900">
-                                {officerUnitFilter ? (
-                                  <span
-                                    dangerouslySetInnerHTML={{
-                                      __html:
-                                        visitor.officer?.unit
-                                          ?.toString()
-                                          ?.replace(
-                                            new RegExp(
-                                              `(${officerUnitFilter})`,
-                                              "gi"
-                                            ),
-                                            '<mark class="bg-yellow-100 text-gray-900  rounded">$1</mark>'
-                                          ) || "N/A",
-                                    }}
-                                  />
-                                ) : (
-                                  visitor.officer?.unit || "N/A"
+                                {highlightMatchedText(
+                                  visitor.officer?.unit,
+                                  searchTerms,
+                                  officerUnitFilter
                                 )}
                               </p>
                             </div>
